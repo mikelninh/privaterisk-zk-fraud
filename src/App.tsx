@@ -8,6 +8,19 @@ const tx = {
   newRecipient: true,
 };
 
+const plonkReceipt = {
+  network: 'Midnight',
+  compiler: 'Compact 0.31.1',
+  runtime: '0.16.0',
+  circuit: 'proveBalanceForTransfer',
+  threshold: '€15,000',
+  privateInput: 'WITHHELD',
+  verifier: 'PLONK / ZKIR',
+  status: 'ACCEPTED',
+  run: '34906492162',
+  runUrl: 'https://github.com/mikelninh/privaterisk-zk-fraud/actions/runs/34906492162',
+};
+
 export default function App() {
   const [ran, setRan] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -20,10 +33,10 @@ export default function App() {
       <header className="topbar">
         <div className="brandmark">PR</div>
         <div>
-          <div className="eyebrow">PRIVATERISK / V0.1</div>
+          <div className="eyebrow">PRIVATERISK / V0.2</div>
           <div className="brand-title">Agentic ZK Fraud Decisioning</div>
         </div>
-        <div className="status-pill"><span /> Demo environment</div>
+        <div className="status-pill verified"><span /> Midnight PLONK verified</div>
       </header>
 
       <section className="hero">
@@ -31,7 +44,7 @@ export default function App() {
           <p className="eyebrow">VERIFIED TRUST · MINIMUM DISCLOSURE</p>
           <h1>Make a financial decision.<br /><em>Not a data grab.</em></h1>
           <p className="hero-copy">
-            An evidence-planning agent asks for the minimum facts required. The privacy guardian blocks over-broad requests. Proofs establish claims. Deterministic policy decides.
+            An evidence-planning agent asks for the minimum facts required. The privacy guardian blocks over-broad requests. A real Midnight Compact predicate proves funding sufficiency. Deterministic policy decides.
           </p>
         </div>
         <div className="north-star">
@@ -40,6 +53,27 @@ export default function App() {
           <div className="metric-divider" />
           <strong>Data disclosed</strong>
         </div>
+      </section>
+
+      <section className="zk-receipt panel">
+        <div className="receipt-intro">
+          <div className="panel-kicker">V0.2 / REAL ZK EVIDENCE</div>
+          <h2>Private balance. Public threshold. Verifiable result.</h2>
+          <p>
+            The balance predicate is compiled from Compact with real PLONK proving/verifying keys and accepted by Midnight's ZKIR checker. The browser replays that verified outcome; it does not pretend to generate the proof live.
+          </p>
+        </div>
+        <div className="receipt-grid">
+          <div><span>CIRCUIT</span><strong>{plonkReceipt.circuit}</strong></div>
+          <div><span>PUBLIC THRESHOLD</span><strong>{plonkReceipt.threshold}</strong></div>
+          <div className="private-cell"><span>PRIVATE BALANCE</span><strong>{plonkReceipt.privateInput}</strong></div>
+          <div><span>VERIFIER</span><strong>{plonkReceipt.verifier}</strong></div>
+          <div><span>COMPACT</span><strong>{plonkReceipt.compiler}</strong></div>
+          <div className="accepted-cell"><span>CHECKER VERDICT</span><strong>✓ {plonkReceipt.status}</strong></div>
+        </div>
+        <a className="evidence-link" href={plonkReceipt.runUrl} target="_blank" rel="noreferrer">
+          Inspect verification run #{plonkReceipt.run} ↗
+        </a>
       </section>
 
       <section className="workspace">
@@ -85,6 +119,14 @@ export default function App() {
                   </div>
                 </div>
               ))}
+              <div className="trace-row zk-trace-row">
+                <div className="trace-index ok">ZK</div>
+                <div>
+                  <div className="trace-meta">Midnight / Compact / PLONK</div>
+                  <strong>BALANCE_GT_TRANSFER cryptographically checked</strong>
+                  <p>Real V0.2 checker evidence: the private witness satisfies the €15,000 public threshold. Raw balance remains outside public ledger state.</p>
+                </div>
+              </div>
               {result.decision === 'CHALLENGE' && !authenticated && (
                 <div className="challenge-box">
                   <div>
@@ -107,8 +149,8 @@ export default function App() {
           <section className="metrics-grid">
             <div className="metric-card"><span>Risk score</span><strong>{result.riskScore.toFixed(2)}</strong><small>policy input</small></div>
             <div className="metric-card glow"><span>Raw fields disclosed</span><strong>{result.rawFieldsDisclosed}</strong><small>minimum disclosure</small></div>
-            <div className="metric-card"><span>Claims verified</span><strong>{Object.values(result.claims).filter(Boolean).length}</strong><small>cryptographic boundary</small></div>
-            <div className="metric-card"><span>Disclosure blocked</span><strong>{result.disclosurePrevented}</strong><small>privacy guardian</small></div>
+            <div className="metric-card"><span>Claims verified</span><strong>{Object.values(result.claims).filter(Boolean).length}</strong><small>trust evidence</small></div>
+            <div className="metric-card"><span>Real ZK predicates</span><strong>1</strong><small>Midnight PLONK verified</small></div>
           </section>
 
           <section className="explain panel">
@@ -123,7 +165,7 @@ export default function App() {
             <div className="panel-kicker">AUTHORITY BOUNDARIES</div>
             <div className="boundary-grid">
               <div><span>AGENT</span><strong>Requests evidence</strong><p>Reasoning and orchestration only.</p></div>
-              <div><span>PROOFS</span><strong>Establish facts</strong><p>No AI decides whether a proof is valid.</p></div>
+              <div><span>PROOFS</span><strong>Establish facts</strong><p>Compact + PLONK verifies predicates; AI cannot override them.</p></div>
               <div><span>RISK</span><strong>Estimates likelihood</strong><p>Statistical signal, not authority.</p></div>
               <div><span>POLICY</span><strong>Permits actions</strong><p>Deterministic control boundary.</p></div>
             </div>
