@@ -36,6 +36,9 @@ export type Evaluation = {
   explanation: string;
 };
 
+// Synthetic provider-side data used by the browser demonstration only.
+// V0.2 cryptographically proves BALANCE_GT_TRANSFER in the separate Midnight
+// Compact/PLONK pipeline; the other claims remain synthetic provider attestations.
 const syntheticPrivateData = {
   identity: { dob: '1993-12-11', kyc: true },
   bank: { accountAgeDays: 920, balance: 27000, activeCompromise: false },
@@ -93,7 +96,10 @@ export function privacyGuard(requests: EvidenceRequest[]): {
   return { approved, blockedRawRequests, trace };
 }
 
-export function mockProofVerifier(claim: ClaimKey): boolean {
+// Browser-demo claim values. BALANCE_GT_TRANSFER intentionally replays the
+// exact V0.2 predicate that is independently compiled and PLONK-verified in CI.
+// This function is not itself a cryptographic verifier.
+export function demoClaimValue(claim: ClaimKey): boolean {
   switch (claim) {
     case 'KYC_VALID':
       return syntheticPrivateData.identity.kyc;
@@ -102,7 +108,7 @@ export function mockProofVerifier(claim: ClaimKey): boolean {
     case 'NO_ACTIVE_COMPROMISE':
       return !syntheticPrivateData.bank.activeCompromise;
     case 'BALANCE_GT_TRANSFER':
-      return syntheticPrivateData.bank.balance > 15_000;
+      return syntheticPrivateData.bank.balance >= 15_000;
   }
 }
 
@@ -144,16 +150,21 @@ export function evaluateTransaction(tx: Transaction): Evaluation {
   trace.push(...guarded.trace);
 
   const claims = Object.fromEntries(
-    guarded.approved.map((request) => [request.claim, mockProofVerifier(request.claim)]),
+    guarded.approved.map((request) => [request.claim, demoClaimValue(request.claim)]),
   ) as Record<ClaimKey, boolean>;
 
-  for (const [claim, value] of Object.entries(claims)) {
+  for (const [claim, value] of Object.entries(claims) as [ClaimKey, boolean][]) {
+    const isMidnightPredicate = claim === 'BALANCE_GT_TRANSFER';
     trace.push({
-      actor: 'Proof Verifier',
+      actor: isMidnightPredicate ? 'Midnight Proof Receipt' : 'Demo Evidence Provider',
       title: `${claim} ${value ? 'verified' : 'failed'}`,
-      detail: value
-        ? 'Claim verified without exposing the underlying private value.'
-        : 'Claim could not be proven.',
+      detail: isMidnightPredicate
+        ? value
+          ? 'V0.2 replays an accepted Compact/PLONK predicate for this synthetic scenario. The private balance is not exposed as public ledger state.'
+          : 'The funding-sufficiency predicate could not be satisfied.'
+        : value
+          ? 'Synthetic provider attestation passed. This claim is not yet backed by the V0.2 Midnight circuit.'
+          : 'Synthetic provider attestation failed.',
       status: value ? 'ok' : 'warn',
     });
   }
@@ -164,7 +175,7 @@ export function evaluateTransaction(tx: Transaction): Evaluation {
   trace.push({
     actor: 'Fraud Engine',
     title: `Risk score ${riskScore.toFixed(2)}`,
-    detail: 'Risk combines transaction context with verified claims.',
+    detail: 'Risk combines transaction context with the available trust claims.',
     status: riskScore >= 0.55 ? 'warn' : 'ok',
   });
   trace.push({
@@ -188,7 +199,7 @@ export function evaluateTransaction(tx: Transaction): Evaluation {
     trace,
     explanation:
       decision === 'CHALLENGE'
-        ? 'The transfer is high-value, from a new device, and to a new recipient. Identity, account tenure, funding sufficiency, and compromise status were verified without exposing the underlying records. Policy requires step-up authentication rather than a decline.'
-        : 'The decision follows deterministic policy over verified claims and transaction risk signals.',
+        ? 'The transfer is high-value, from a new device, and to a new recipient. Identity, account-tenure, and compromise checks are synthetic provider attestations in V0.2; funding sufficiency is backed by the accepted Midnight Compact/PLONK predicate. Policy requires step-up authentication rather than a decline.'
+        : 'The decision follows deterministic policy over available trust claims and transaction risk signals.',
   };
 }
