@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@midnight-ntwrk/compact-runtime": "0.16.0",
-    "@midnight-ntwrk/midnight-js-protocol": "4.1.1"
+    "@midnight-ntwrk/midnight-js-protocol": "4.1.1",
+    "@midnight-ntwrk/zkir-v2": "2.1.0"
   },
   "devDependencies": {
     "@types/node": "latest",
