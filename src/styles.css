@@ -20,6 +20,7 @@ button { font: inherit; }
 .eyebrow, .panel-kicker, .trace-meta { font-size: 10px; letter-spacing: .17em; text-transform: uppercase; color: #7f8a9f; font-weight: 800; }
 .status-pill { margin-left: auto; color: #a7b0c0; border: 1px solid #232a36; border-radius: 999px; padding: 8px 12px; font-size: 12px; display: flex; gap: 8px; align-items: center; }
 .status-pill span { width: 7px; height: 7px; border-radius: 50%; background: #68f3ad; box-shadow: 0 0 18px #68f3ad; }
+.status-pill.verified { border-color: #285941; color: #b8f7d7; background: rgba(111, 240, 175, .035); }
 
 .hero { display: grid; grid-template-columns: 1.7fr .7fr; gap: 48px; padding: 88px 0 54px; align-items: end; }
 .hero h1 { font-size: clamp(46px, 7vw, 92px); line-height: .96; letter-spacing: -.055em; margin: 12px 0 24px; max-width: 920px; }
@@ -30,10 +31,24 @@ button { font: inherit; }
 .north-star strong { font-size: 22px; }
 .metric-divider { width: 100%; height: 1px; background: #303747; margin: 4px 0; }
 
-.workspace { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
 .panel { background: rgba(12, 15, 21, .88); border: 1px solid #202632; box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
-.scenario-card { padding: 26px; }
 .panel h2 { margin: 8px 0 0; font-size: 22px; letter-spacing: -.03em; }
+
+.zk-receipt { margin-bottom: 16px; padding: 26px; border-color: #285941; background: linear-gradient(135deg, rgba(111, 240, 175, .035), rgba(12, 15, 21, .92) 45%); }
+.receipt-intro { display: grid; grid-template-columns: minmax(260px, .9fr) minmax(320px, 1.4fr); gap: 38px; align-items: end; padding-bottom: 24px; }
+.receipt-intro p { margin: 0; color: #8f9bad; line-height: 1.65; font-size: 13px; }
+.receipt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #26302e; border: 1px solid #26302e; }
+.receipt-grid > div { min-width: 0; background: #0a0e12; padding: 16px 18px; display: grid; gap: 7px; }
+.receipt-grid span { color: #6c7889; font-size: 9px; font-weight: 900; letter-spacing: .13em; }
+.receipt-grid strong { overflow-wrap: anywhere; font-size: 13px; }
+.receipt-grid .private-cell { background: repeating-linear-gradient(-45deg, #0a0e12, #0a0e12 8px, #0d1217 8px, #0d1217 16px); }
+.receipt-grid .private-cell strong { color: #ffd171; letter-spacing: .12em; }
+.receipt-grid .accepted-cell strong { color: #6ff0af; }
+.evidence-link { display: inline-block; margin-top: 16px; color: #87f3ba; font-size: 11px; text-decoration: none; border-bottom: 1px solid #315b47; padding-bottom: 3px; }
+.evidence-link:hover { color: #bcf9d7; }
+
+.workspace { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+.scenario-card { padding: 26px; }
 .amount { font-size: 48px; font-weight: 800; letter-spacing: -.05em; margin: 34px 0 26px; }
 .amount span { color: #647083; font-size: 24px; }
 .signal-grid { display: grid; gap: 12px; margin-bottom: 34px; color: #c5ccd8; font-size: 13px; }
@@ -59,6 +74,7 @@ button { font: inherit; }
 .trace-index.blocked { border-color: #69383e; color: #ff8f9b; }
 .trace-row strong { display: block; font-size: 14px; margin: 4px 0; }
 .trace-row p { margin: 0; color: #818da0; font-size: 12px; line-height: 1.55; }
+.zk-trace-row { margin: 4px 0; padding: 17px 12px; border: 1px solid #285941; background: rgba(111,240,175,.025); }
 .challenge-box { border: 1px solid #745b27; background: rgba(255, 209, 113, .04); margin-top: 18px; padding: 18px; display: grid; grid-template-columns: 1fr 170px; gap: 20px; align-items: center; }
 .challenge-box strong { display: block; margin-top: 6px; }
 .challenge-box button { padding: 11px 14px; }
@@ -85,6 +101,8 @@ footer { display: flex; justify-content: space-between; color: #596477; font-siz
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; padding-top: 58px; }
   .north-star { border-left: 0; border-top: 1px solid #232a36; padding: 22px 0 0; }
+  .receipt-intro { grid-template-columns: 1fr; gap: 14px; }
+  .receipt-grid { grid-template-columns: repeat(2, 1fr); }
   .workspace { grid-template-columns: 1fr; }
   .metrics-grid, .boundary-grid { grid-template-columns: repeat(2, 1fr); }
   .explain { grid-template-columns: 1fr; }
@@ -94,7 +112,7 @@ footer { display: flex; justify-content: space-between; color: #596477; font-siz
   .page-shell { width: min(100% - 20px, 1240px); }
   .status-pill { display: none; }
   .hero h1 { font-size: 48px; }
-  .metrics-grid, .boundary-grid { grid-template-columns: 1fr; }
+  .receipt-grid, .metrics-grid, .boundary-grid { grid-template-columns: 1fr; }
   .challenge-box { grid-template-columns: 1fr; }
   footer { gap: 24px; flex-direction: column; }
 }
