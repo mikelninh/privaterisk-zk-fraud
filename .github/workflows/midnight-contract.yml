@@ -1,0 +1,52 @@
+name: Midnight Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/midnight/**'
+      - '.github/workflows/midnight-contract.yml'
+  pull_request:
+    paths:
+      - 'contracts/midnight/**'
+      - '.github/workflows/midnight-contract.yml'
+  workflow_dispatch:
+
+jobs:
+  compact-zk-circuit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Compact devtools + mainnet-compatible toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh | sh
+          source "$HOME/.local/bin/env"
+          compact update 0.31.1
+          compact compile --version
+
+      - name: Compile PrivateRisk Compact contract and ZK artifacts
+        shell: bash
+        run: |
+          source "$HOME/.local/bin/env"
+          compact compile \
+            contracts/midnight/privaterisk.compact \
+            contracts/midnight/managed/privaterisk
+
+      - name: Prove generated artifact boundary
+        shell: bash
+        run: |
+          test -d contracts/midnight/managed/privaterisk/contract
+          test -d contracts/midnight/managed/privaterisk/keys
+          test -d contracts/midnight/managed/privaterisk/zkir
+          echo 'Compact contract, proving/verifying keys and ZKIR generated.'
+
+      - name: Upload compiled Midnight contract artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: privaterisk-midnight-compact-artifacts
+          path: contracts/midnight/managed/privaterisk
+          retention-days: 7
