@@ -1,7 +1,7 @@
 {
   "name": "privaterisk-zk-fraud",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
     "pilot-api": "node services/pilot-api/server.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs",
     "midnight:compile": "compact compile contracts/midnight/privaterisk.compact contracts/midnight/managed/privaterisk",
-    "midnight:stage": "node scripts/stage-midnight-assets.mjs"
+    "midnight:stage": "node scripts/stage-midnight-assets.mjs",
+    "midnight:preprod-deploy": "node scripts/preprod-deploy.mjs"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-runtime": "0.16.0",
@@ -21,6 +22,9 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@midnight-ntwrk/midnight-js-contracts": "4.1.1",
+    "@midnight-ntwrk/midnight-js-protocol": "4.1.1",
+    "@midnight-ntwrk/testkit-js": "4.1.1",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@vitejs/plugin-react": "4.3.4",
@@ -30,6 +34,7 @@
     "vite": "6.4.1",
     "vite-plugin-top-level-await": "1.4.4",
     "vite-plugin-wasm": "3.3.0",
-    "vitest": "3.2.4"
+    "vitest": "3.2.4",
+    "ws": "8.20.0"
   }
 }
