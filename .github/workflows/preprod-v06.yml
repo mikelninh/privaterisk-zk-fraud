@@ -1,0 +1,89 @@
+name: V0.6 Midnight Preprod
+
+on:
+  push:
+    branches: [build/v0.6-preprod]
+  workflow_dispatch:
+
+concurrency:
+  group: privaterisk-v06-preprod-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PROOF_SERVER_VERSION: 8.0.3
+  PRIVATERISK_PUBLIC_API: https://htffcvdopavknnylbowl.supabase.co/functions/v1/privaterisk-v06
+  NODE_OPTIONS: --max-old-space-size=6144
+
+jobs:
+  deploy-preprod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Compact toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          compact update 0.31.1
+          compact compile --version
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Verify public HTTPS trust service
+        run: npm run test:public-service
+
+      - name: Compile PrivateRisk Compact contract
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          npm run midnight:compile
+
+      - name: Deploy to Midnight Preprod
+        id: deploy
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set +e
+          MN_TEST_ENVIRONMENT=preprod npm run midnight:preprod-deploy 2>&1 | tee /tmp/preprod-deploy.log
+          STATUS=${PIPESTATUS[0]}
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: privaterisk-v06-preprod-evidence
+          path: |
+            evidence/V0.6_PREPROD_DEPLOYMENT.json
+            evidence/preprod-*.log
+            /tmp/preprod-deploy.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce real deployment gate
+        shell: bash
+        run: |
+          if [ ! -f evidence/V0.6_PREPROD_DEPLOYMENT.json ]; then
+            echo "No deployment evidence file produced."
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const e = JSON.parse(fs.readFileSync('evidence/V0.6_PREPROD_DEPLOYMENT.json','utf8'));
+          console.log(JSON.stringify(e,null,2));
+          if (e.state !== 'FINALIZED' || !e.contractAddress || !e.transactionId) {
+            console.error('V0.6 truth gate: Preprod deployment did not reach FINALIZED with concrete identifiers.');
+            process.exit(1);
+          }
+          NODE

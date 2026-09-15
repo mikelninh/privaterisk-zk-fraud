@@ -2,9 +2,11 @@ import type { FraudEventEnvelope } from './eventEnvelope';
 import type { AuditRecord } from './auditStore';
 import type { IssuerRegistryEntry, SignedAttestation } from './attestations';
 
+export const PUBLIC_V06_API = 'https://htffcvdopavknnylbowl.supabase.co/functions/v1/privaterisk-v06';
+
 export type RemoteEvidenceBundle = {
   service: string;
-  mode: 'external-http';
+  mode: string;
   eventId: string;
   registry: IssuerRegistryEntry[];
   attestations: SignedAttestation[];
@@ -28,6 +30,7 @@ export type RemoteAuditReceipt = {
     headHash: string | null;
     brokenAt: number | null;
   };
+  storage?: string;
 };
 
 export type PreprodProbe = {
@@ -42,17 +45,18 @@ export type PreprodProbe = {
 };
 
 type RegistryWireEntry = Omit<IssuerRegistryEntry, 'publicKey'> & { publicJwk: JsonWebKey };
-
 type EvidenceWireBundle = Omit<RemoteEvidenceBundle, 'registry'> & { registry: RegistryWireEntry[] };
 
 function configuredBase(): string | null {
   const env = (import.meta.env.VITE_PILOT_API_URL as string | undefined)?.trim();
   if (env) return env.replace(/\/$/, '');
   if (typeof window !== 'undefined') {
-    const runtime = new URLSearchParams(window.location.search).get('pilotApi');
+    const params = new URLSearchParams(window.location.search);
+    const runtime = params.get('pilotApi');
     if (runtime) return runtime.replace(/\/$/, '');
+    if (params.get('localOnly') === '1') return null;
   }
-  return null;
+  return PUBLIC_V06_API;
 }
 
 export function pilotApiBase(): string | null {
