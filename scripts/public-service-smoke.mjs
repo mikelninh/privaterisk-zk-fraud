@@ -26,6 +26,9 @@ const health = await json(`${base}/health`);
 if (health.service !== 'privaterisk-v06' || health.mode !== 'public-supabase-edge') {
   throw new Error(`Unexpected public-service health: ${JSON.stringify(health)}`);
 }
+if (health.version !== '0.7.0' || health.policyVersion !== 'privaterisk-policy-v0.7') {
+  throw new Error(`V0.7 control plane is not active: ${JSON.stringify(health)}`);
+}
 
 const eventId = `evt_public_${crypto.randomUUID()}`;
 const subjectId = `subject_${crypto.randomUUID()}`;
@@ -68,22 +71,86 @@ for (const attestation of evidence.attestations) {
   if (!valid) throw new Error(`Signature verification failed for ${attestation.body.claim}`);
 }
 
+const claims = Object.fromEntries(evidence.attestations.map((a) => [a.body.claim, a.body.value]));
+claims.BALANCE_GT_TRANSFER = true;
+const provenance = Object.fromEntries(evidence.attestations.map((a) => [a.body.claim, `signed-attestation:${a.body.issuer}`]));
+provenance.BALANCE_GT_TRANSFER = 'midnight-proof:compact-plonk';
+
+const firstDecision = await json(`${base}/v1/decisions`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ event, claims, provenance }),
+});
+if (firstDecision.receipt?.decision !== 'CHALLENGE' || firstDecision.receipt?.reasonCode !== 'ELEVATED_TRANSACTION_RISK') {
+  throw new Error(`Canonical V0.7 decision should CHALLENGE: ${JSON.stringify(firstDecision)}`);
+}
+if (firstDecision.receipt.rawFieldsDisclosed !== 0 || !firstDecision.audit?.integrity?.valid) {
+  throw new Error(`Decision receipt/audit truth failed: ${JSON.stringify(firstDecision)}`);
+}
+
+const idempotent = await json(`${base}/v1/decisions`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ event, claims, provenance }),
+});
+if (!idempotent.receipt?.idempotentReplay || idempotent.receipt.decisionId !== firstDecision.receipt.decisionId) {
+  throw new Error(`Decision idempotency failed: ${JSON.stringify(idempotent)}`);
+}
+
+const fetched = await json(`${base}/v1/decisions/${encodeURIComponent(firstDecision.receipt.decisionId)}`);
+if (fetched.receipt?.receiptHash !== firstDecision.receipt.receiptHash) {
+  throw new Error(`Decision receipt lookup mismatch: ${JSON.stringify(fetched)}`);
+}
+
+const replay = await json(`${base}/v1/decisions/${encodeURIComponent(firstDecision.receipt.decisionId)}/replay`, { method: 'POST' });
+if (!replay.matchesOriginal || replay.replay?.decision !== firstDecision.receipt.decision) {
+  throw new Error(`Deterministic replay failed: ${JSON.stringify(replay)}`);
+}
+
+const missingEvidenceEvent = {
+  ...event,
+  eventId: `evt_missing_${crypto.randomUUID()}`,
+  payload: { ...event.payload, transactionId: `tx_missing_${crypto.randomUUID()}` },
+};
+const missingClaims = { ...claims };
+delete missingClaims.BALANCE_GT_TRANSFER;
+const failClosed = await json(`${base}/v1/decisions`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ event: missingEvidenceEvent, claims: missingClaims, provenance }),
+});
+if (failClosed.receipt?.decision !== 'REVIEW' || failClosed.receipt?.reasonCode !== 'MISSING_CRITICAL_EVIDENCE') {
+  throw new Error(`Missing evidence must fail closed to REVIEW: ${JSON.stringify(failClosed)}`);
+}
+
+const metrics = await json(`${base}/v1/metrics`);
+if (metrics.policyVersion !== 'privaterisk-policy-v0.7' || metrics.decisionsTotal < 2) {
+  throw new Error(`Operational metrics missing: ${JSON.stringify(metrics)}`);
+}
+if (metrics.byDecision?.CHALLENGE < 1 || metrics.byDecision?.REVIEW < 1 || metrics.replayMismatches !== 0) {
+  throw new Error(`Operational metrics are inconsistent: ${JSON.stringify(metrics)}`);
+}
+if (!String(metrics.truthBoundary).includes('not fraud precision')) {
+  throw new Error('Metrics truth boundary is missing.');
+}
+
+// Legacy explicit audit API remains backwards compatible.
 const record = {
   auditId: `audit_${crypto.randomUUID()}`,
   eventId,
   transactionId: event.payload.transactionId,
   correlationId: eventId.slice(0, 16),
   createdAt: new Date().toISOString(),
-  policyVersion: 'fraud-policy-v0.6',
+  policyVersion: 'privaterisk-policy-v0.7',
   decision: 'CHALLENGE',
-  riskScore: 0.71,
-  networkState: 'PREPROD_NOT_CONFIGURED',
+  riskScore: firstDecision.receipt.riskScore,
+  networkState: 'PREPROD_EXTERNAL_GATE',
   rawFieldsDisclosed: 0,
   evidence: evidence.attestations.map((a) => ({ claim: a.body.claim, source: 'signed-attestation', issuer: a.body.issuer })),
 };
 const audit = await json(`${base}/v1/audit`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json', 'idempotency-key': `decision:${eventId}:fraud-policy-v0.6` },
+  headers: { 'content-type': 'application/json', 'idempotency-key': `legacy:${eventId}:privaterisk-policy-v0.7` },
   body: JSON.stringify({ record }),
 });
 if (!audit.integrity?.valid) throw new Error(`Public audit chain did not verify: ${JSON.stringify(audit)}`);
@@ -96,7 +163,14 @@ if (probe.target !== 'Midnight Preprod' || probe.writeState !== 'NOT_CONFIGURED'
 console.log(JSON.stringify({
   status: 'PASS',
   base,
+  serviceVersion: health.version,
+  policyVersion: health.policyVersion,
   signedAttestations: evidence.attestations.length,
+  canonicalDecision: firstDecision.receipt.decision,
+  decisionReceiptHash: firstDecision.receipt.receiptHash,
+  replayMatchesOriginal: replay.matchesOriginal,
+  failClosedDecision: failClosed.receipt.decision,
+  decisionsObserved: metrics.decisionsTotal,
   auditChainVerified: audit.integrity.valid,
   preprodNodeReachable: probe.node?.reachable,
   preprodIndexerReachable: probe.indexer?.reachable,
