@@ -16,6 +16,7 @@ import {
 } from './witnesses.js';
 
 const SAMPLE_COIN_PUBLIC_KEY = 'ca'.repeat(32);
+const EXPIRY = 2_000_000_000_000n;
 
 function createHarness(balance: bigint): {
   contract: Contract<PrivateRiskPrivateState>;
@@ -51,19 +52,21 @@ function createHarness(balance: bigint): {
   };
 }
 
-function requestId(seed: number): Uint8Array {
+function bytes32(seed: number): Uint8Array {
   return new Uint8Array(32).fill(seed);
 }
 
 describe('PrivateRisk Midnight Compact balance predicate', () => {
-  it('accepts €15k when the private balance is €27k without changing the private balance', () => {
+  it('accepts €15k when the private balance is €27k and binds policy/expiry context', () => {
     const harness = createHarness(27_000n);
-    const id = requestId(1);
+    const id = bytes32(1);
 
     const result = harness.contract.impureCircuits.proveBalanceForTransfer(
       harness.context,
       id,
       15_000n,
+      bytes32(7),
+      EXPIRY,
     );
     harness.context = result.context;
 
@@ -78,20 +81,24 @@ describe('PrivateRisk Midnight Compact balance predicate', () => {
     expect(() =>
       harness.contract.impureCircuits.proveBalanceForTransfer(
         harness.context,
-        requestId(2),
+        bytes32(2),
         15_000n,
+        bytes32(7),
+        EXPIRY,
       ),
     ).toThrow('Private balance is below the transfer amount');
   });
 
   it('rejects replay of a request id after a successful predicate proof', () => {
     const harness = createHarness(27_000n);
-    const id = requestId(3);
+    const id = bytes32(3);
 
     const first = harness.contract.impureCircuits.proveBalanceForTransfer(
       harness.context,
       id,
       15_000n,
+      bytes32(7),
+      EXPIRY,
     );
     harness.context = first.context;
 
@@ -100,7 +107,23 @@ describe('PrivateRisk Midnight Compact balance predicate', () => {
         harness.context,
         id,
         15_000n,
+        bytes32(7),
+        EXPIRY,
       ),
     ).toThrow('PrivateRisk request has already been used');
+  });
+
+  it('rejects missing expiry context', () => {
+    const harness = createHarness(27_000n);
+
+    expect(() =>
+      harness.contract.impureCircuits.proveBalanceForTransfer(
+        harness.context,
+        bytes32(4),
+        15_000n,
+        bytes32(7),
+        0n,
+      ),
+    ).toThrow('PrivateRisk proof expiry is required');
   });
 });
