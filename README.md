@@ -8,166 +8,151 @@ A bounded evidence-planning agent asks for the minimum facts needed, a Privacy G
 
 > North-star metric: **verified trust per unit of data disclosed**.
 
-## V0.4 — signed attestations + live ZK pilot
+## V0.5 — external trust service + tamper-evident audit
 
 Canonical scenario:
 
-`payment event → minimum evidence → 3 signed attestations + live ZK proof → CHALLENGE → step-up auth → APPROVED`
+`payment event → external signed attestations + live ZK proof → deterministic policy → hash-chain audit → CHALLENGE`
 
-V0.4 turns the V0.3 cryptographic proof into a more realistic financial-integration slice:
+V0.5 moves the issuer and audit boundaries **out of the browser** in the verified pilot path:
 
 - Kafka-compatible `payments.transaction.created` event envelope
-- ES256-signed `KYC_VALID`, `ACCOUNT_AGE_GT_365`, and `NO_ACTIVE_COMPROMISE` attestations
-- authorised issuer registry with claim-level permissions
-- subject + event binding, expiry, tamper detection and unknown-issuer rejection
-- live browser Compact/PLONK proof for `BALANCE_GT_TRANSFER`
+- external HTTP trust service for signed evidence
+- service-side ES256 issuer private keys; browser gets only signed claims + public verification keys
+- browser-side verification of issuer/key permissions, subject binding, event binding, expiry and signature
+- live Compact/PLONK `BALANCE_GT_TRANSFER` proof remains local to the private proving boundary
 - deterministic fail-closed fraud policy
-- browser-persistent append-only audit records
-- explicit Midnight network truth states
+- server-side append-only SHA-256 hash-chain audit log with idempotency
+- audit-chain integrity verification endpoint
+- read-only Midnight Preprod node/indexer connectivity probe
+- explicit network-write truth state: **NOT CONFIGURED** until a real signed transaction exists
 
 ```text
-Payment Event
-      ↓
-Evidence Planner
-      ↓
-Privacy Guardian
-      ↓
-┌───────────────────────────────┐
-│ Authorised evidence providers │
-│ Identity → KYC_VALID          │
-│ Bank     → TENURE_GT_365      │
-│ Fraud    → NO_COMPROMISE      │
-└──────────────┬────────────────┘
-               ↓ signed ES256 attestations
-Private balance ──→ Compact / PLONK browser proof
-               ↓
-        verified predicates only
-               ↓
+payments.transaction.created
+          ↓
+   Evidence Planner
+          ↓
+   Privacy Guardian
+          ↓
+ ┌──────────────────────────┐
+ │ External Trust Service   │
+ │ KYC           → ES256    │
+ │ Account age   → ES256    │
+ │ Compromise    → ES256    │
+ └──────────────┬───────────┘
+                ↓ signed predicates
+ Private balance ──→ Compact / PLONK
+                ↓
+       verified claims only
+                ↓
           Fraud Scorer
-               ↓
+                ↓
       Deterministic Policy
-               ↓
+                ↓
     APPROVE / CHALLENGE / REVIEW
-               ↓
-        append-only audit
+                ↓
+   tamper-evident hash-chain audit
 ```
 
 ## Evidence maturity
 
-| Claim | V0.4 status |
+| Claim | V0.5 status |
 |---|---|
-| `KYC_VALID` | **Signed ES256 demo attestation, authorised issuer registry** |
-| `ACCOUNT_AGE_GT_365` | **Signed ES256 demo attestation, authorised issuer registry** |
-| `NO_ACTIVE_COMPROMISE` | **Signed ES256 demo attestation, authorised issuer registry** |
+| `KYC_VALID` | **External service ES256 attestation** |
+| `ACCOUNT_AGE_GT_365` | **External service ES256 attestation** |
+| `NO_ACTIVE_COMPROMISE` | **External service ES256 attestation** |
 | `BALANCE_GT_TRANSFER` | **Live browser Compact / PLONK proof** |
 
-The demo issuers create **ephemeral, non-exportable signing keys at runtime**. No reusable private issuer key is committed to this public repository. This is still a simulation of issuer onboarding: production attestor keys belong in controlled HSM/KMS/MPC-style custody.
+The external-service CI path never sends issuer private keys to the browser or exposes them in API responses. Demo keys are still process-local development keys, not production HSM/KMS custody.
 
-## Privacy / authority boundary
+## Audit integrity
 
-Reasoning, proof, prediction and authority are different jobs:
-
-1. **Agent** — decides which evidence is useful.
-2. **Privacy Guardian** — enforces minimum-necessary disclosure.
-3. **Authorised issuers** — sign specific allowed claims.
-4. **Compact / PLONK** — proves the private balance predicate.
-5. **Fraud scoring** — estimates risk.
-6. **Policy** — determines permitted actions.
-7. **Human / strong auth** — handles high-risk exceptions and challenges.
-
-The agent never directly freezes an account or releases funds. Missing/invalid critical evidence does not become `true`; the system fails closed to `REVIEW`.
-
-## Event contract
-
-The pilot uses an explicit Kafka-compatible envelope:
+The pilot API stores decision receipts as an append-only chain:
 
 ```text
-topic:         payments.transaction.created
-key:           subject id
-schemaVersion: 1.0
-eventId:       unique event id
-payload:       transaction id + risk context
+GENESIS
+  ↓
+record 0 + previousHash → SHA-256 hash 0
+  ↓
+record 1 + hash 0       → SHA-256 hash 1
+  ↓
+...
 ```
 
-The project does not claim that GitHub Pages itself is connected to a production Kafka cluster. The event shape is the adapter boundary for that future integration.
+Each record includes event/transaction identifiers, correlation ID, policy version, decision, risk score, evidence provenance/digests, proof latency, network truth state and the raw-fields-disclosed metric. Reusing the same decision idempotency key returns the existing entry rather than creating a duplicate.
 
-## Durable audit
+This is **tamper-evident**, not yet a production immutable ledger. Real deployment still needs durable database/event-store storage, retention policy, backups and access controls.
 
-Each successful pilot run writes an append-only browser audit record containing:
+## Midnight Preprod truth boundary
 
-- event + transaction IDs
-- correlation ID
-- policy version
-- risk score + decision
-- proof latency
-- evidence provenance / digests
-- network truth state
-- raw-fields-disclosed metric
-
-The current browser store persists across refreshes and is deliberately an interface boundary, not a substitute for a production append-only database/event log.
-
-## Midnight network truth
-
-V0.4 keeps the local proof and network lifecycle separate.
-
-Current UI state:
+V0.5 adds a real read-only connectivity probe against the official Preprod node/indexer endpoints, but deliberately does not claim a chain write.
 
 ```text
-local PLONK proof:     REAL
-Preprod submission:    NOT CONFIGURED
-contract address:      NONE CLAIMED
-network transaction:   NONE CLAIMED
+local PLONK proof:       REAL
+Preprod read probe:      REAL HTTP probe
+Preprod submission:      NOT CONFIGURED
+contract address:        NONE CLAIMED
+network transaction:     NONE CLAIMED
 ```
 
-The code has explicit states for local proof, Preprod submission, confirmation and finality, and rejects a submitted/confirmed/final receipt without concrete chain identifiers.
-
-See [`docs/MIDNIGHT_PREPROD_RUNBOOK.md`](docs/MIDNIGHT_PREPROD_RUNBOOK.md) for the next network gate.
+A future version may only show `SUBMITTED`, `CONFIRMED` or `FINAL` after a verifiable contract address and transaction identifier exist.
 
 ## Verification
 
-PR CI covers:
+CI now covers:
 
 - core fraud-policy tests
-- signed-attestation success / tamper / expiry / unknown-issuer cases
-- event-contract + audit-store + network-truth tests
-- Compact compilation and browser proving assets
-- production Vite build
-- real Chromium run of the production bundle
-- fresh PLONK proof
-- all three signed issuer attestations visible
-- durable audit record survives refresh
-- explicit `WITHHELD` / `NOT SUBMITTED` truth boundaries
+- signed-attestation tamper / expiry / unknown-issuer cases
+- service-side attestation + idempotency self-test
+- server hash-chain integrity + tamper detection
+- Compact compilation and real browser proving assets
+- production Vite build configured against the external pilot API
+- real Chromium decision flow through **HTTP service → attestations → PLONK proof → policy → server audit**
+- audit integrity endpoint after the browser decision
+- explicit `WITHHELD`, `EXTERNAL HTTP`, `CHAIN VERIFIED`, and `WRITE STATE: NOT CONFIGURED` truth boundaries
 
-## Run locally
+## Run the full V0.5 pilot locally
+
+Terminal 1:
 
 ```bash
 npm install --legacy-peer-deps
-npm run midnight:compile
-npm run midnight:stage
-npm run dev
+npm run pilot-api
 ```
 
-Test + production build:
+Terminal 2:
+
+```bash
+npm run midnight:compile
+npm run midnight:stage
+VITE_PILOT_API_URL=http://127.0.0.1:8787 npm run dev
+```
+
+Tests:
 
 ```bash
 npm test
+npm run test:pilot-api
 npm run build
 ```
+
+GitHub Pages has no persistent backend, so if `VITE_PILOT_API_URL` is not configured the public static demo explicitly falls back to ephemeral browser issuers/local audit storage. That fallback is labelled in the UI and is **not** presented as the V0.5 external-service boundary.
 
 ## Build OS
 
 `01 SHAPE → 02 SPECIFY → 03 DELEGATE → 04 PROVE → 05 SHIP → 06 WATCH`
 
-See `.ai-build/` for the product contract, architecture, acceptance criteria and operating guardrails.
+See `.ai-build/` for acceptance criteria and operating guardrails.
 
 ## Roadmap
 
 - **V0.1** — bounded fraud-decision vertical slice ✅
 - **V0.2** — real Midnight Compact / PLONK funding predicate ✅
 - **V0.3** — live/on-demand browser proving ✅
-- **V0.4** — signed issuer attestations + event contract + durable pilot audit 🚧
-- **V0.5** — real Midnight Preprod lifecycle + external issuer adapter
-- **Production hardening** — HSM/KMS custody, HA, observability, security/compliance, real fraud data, rule/model governance and operational controls
+- **V0.4** — signed attestations + event contract + browser pilot audit ✅
+- **V0.5** — external trust service + hash-chain audit + Preprod read probe 🚧
+- **V0.6** — real Midnight Preprod submission/confirmation + deployed external service
+- **Production hardening** — HSM/KMS, mTLS/service identity, durable storage, HA/SLOs, observability, security/compliance, real fraud data and model/rule governance
 
 ---
 
