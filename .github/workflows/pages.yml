@@ -33,6 +33,8 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           compact update 0.31.1
 
+      - run: npm install --legacy-peer-deps
+
       - name: Compile and stage Midnight browser prover
         shell: bash
         run: |
@@ -40,7 +42,6 @@ jobs:
           npm run midnight:compile
           npm run midnight:stage
 
-      - run: npm install
       - run: npm test
       - run: npm run build
       - uses: actions/configure-pages@v5
