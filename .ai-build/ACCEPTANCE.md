@@ -1,69 +1,68 @@
-# ACCEPTANCE — V0.5
+# ACCEPTANCE — PrivateRisk V0.7
 
-## Service boundary
-- [x] External HTTP pilot API exists.
-- [x] Issuer private keys are generated and retained server-side in external mode.
-- [x] API exposes only signed attestations + public verification JWKs.
-- [x] Browser imports public keys and verifies ES256 signatures itself.
-- [x] Unknown issuer/key, unauthorised claim, wrong subject, wrong event, expiry and bad signature remain fail-closed conditions.
-- [x] Evidence service is idempotent per event ID.
+## Operational control plane
+- [x] `privaterisk-policy-v0.7` is explicit and versioned.
+- [x] `POST /v1/decisions` returns a deterministic decision receipt.
+- [x] Receipt binds event, transaction, subject, claims, provenance, policy, reason code and risk score.
+- [x] Receipt includes deterministic `inputHash`, `decisionId` and `receiptHash`.
+- [x] Identical decision inputs are idempotent and return the existing decision identity.
+- [x] Missing critical evidence returns `REVIEW / MISSING_CRITICAL_EVIDENCE`.
+- [x] Failed critical evidence returns `REVIEW / FAILED_CRITICAL_EVIDENCE`.
+- [x] Canonical €15k/new-device/new-recipient scenario returns `CHALLENGE`.
+- [x] Fully verified low-risk scenario can return `APPROVE`.
 
-## Audit integrity
-- [x] Decision records are appended server-side in external mode.
-- [x] Each record includes previous hash + SHA-256 content hash.
-- [x] Audit API exposes chain-integrity verification.
-- [x] Duplicate decision idempotency keys return the original entry rather than duplicate it.
-- [x] Self-test proves tampering is detected.
-- [x] Browser smoke verifies a real server-side audit chain after the decision.
+## Replay / policy safety
+- [x] `POST /v1/decisions/:id/replay` reconstructs the policy result from stored canonical input.
+- [x] Release eval requires `matchesOriginal=true`.
+- [x] Browser independently calculates the policy result and compares it with the remote control plane.
+- [x] Local/remote policy disagreement fails closed with `CONTROL_PLANE_MISMATCH`.
+- [x] Replay disagreement fails closed with `CONTROL_PLANE_REPLAY_MISMATCH`.
+- [x] Internal replay input is not returned in public decision receipts.
 
-## Event / fraud policy
-- [x] Kafka-compatible `payments.transaction.created` envelope remains explicit.
-- [x] Policy receives verified predicates and provenance, never raw KYC / tenure / compromise source records.
-- [x] `BALANCE_GT_TRANSFER` remains a required live Compact/PLONK predicate.
-- [x] Missing critical evidence never silently becomes true.
-- [x] Deterministic policy remains the action-authority boundary.
-- [x] Step-up authentication remains separate from agent reasoning.
+## Durable public state
+- [x] Public decision/idempotency state is persisted in Postgres rather than Edge-isolate memory.
+- [x] Public replay operations are persisted for operational metrics.
+- [x] Public audit records are persisted in Postgres.
+- [x] Audit appends are serialised with a Postgres advisory transaction lock.
+- [x] Audit append is idempotent by key.
+- [x] Database-side verification detects broken index / previous-hash / content-hash continuity.
+- [x] Anonymous/authenticated database roles have no direct table access; Edge service role owns the storage boundary.
 
-## Midnight / ZK
-- [x] Real browser PLONK proving remains green.
-- [x] Private synthetic balance stays inside the local proving boundary.
-- [x] Public proof context remains bound to request ID, transfer threshold, policy version and expiry.
-- [x] Preprod node/indexer endpoints are probed read-only through the pilot API.
-- [x] UI clearly separates read reachability from write state.
-- [x] Write state stays `NOT CONFIGURED`; no contract address or tx ID is invented.
+## Trust / privacy boundary
+- [x] Existing ES256 attestation path remains intact.
+- [x] Issuer private keys are not returned to the client.
+- [x] Browser verifies signed claims against public JWKs.
+- [x] `BALANCE_GT_TRANSFER` remains the Compact/PLONK predicate boundary.
+- [x] Control-plane policy sees verified predicates/provenance, not raw balance/KYC source records.
+- [x] Decision receipt reports `rawFieldsDisclosed=0` for the canonical scenario.
+
+## Observability
+- [x] `GET /v1/metrics` exposes decision counts/rates, reason codes, evidence failures, idempotent replays, replay mismatches and p50/p95 decision latency.
+- [x] Metrics explicitly state that challenge/review rate is not fraud precision, recall or false-positive rate without labelled production outcomes.
+- [x] Metrics are derived from durable public decision/operation rows.
 
 ## CI / evidence
-- [x] Unit/regression tests run.
-- [x] Pilot API self-test covers event idempotency, audit idempotency and hash-chain tamper detection.
-- [x] Production bundle is built with the external API URL configured.
-- [x] CI boots the pilot API and production Vite preview as separate processes.
-- [x] Headless Chromium completes HTTP attestations → browser verification → PLONK proof → policy → server audit.
-- [x] Browser smoke checks `WITHHELD`, `EXTERNAL HTTP`, `CHAIN VERIFIED`, signed issuer provenance and Preprod write truth boundary.
+- [x] Core unit/regression tests remain part of CI.
+- [x] Local V0.7 control-plane eval covers CHALLENGE, APPROVE, missing evidence, failed evidence, idempotency, replay, metrics and audit tamper detection.
+- [x] Public HTTPS smoke exercises signed evidence → decision receipt → duplicate idempotency → receipt lookup → replay → fail-closed case → metrics → audit → Preprod probe.
+- [x] Compact contract compiles and browser proving assets are staged/asserted.
+- [x] Production browser smoke runs against a real local HTTP control plane.
 
-## Static demo truth boundary
-- [x] GitHub Pages fallback is explicitly labelled `BROWSER FALLBACK` when no external API URL is configured.
-- [x] Static fallback is not presented as the V0.5 external-service path.
+## Midnight Preprod truth boundary
+- [x] Node, indexer and proof-server connectivity are independently verifiable.
+- [x] V0.6 deployment code now constructs the Midnight.js 4.1.1 wallet provider with the correct protocol key objects.
+- [x] Automated machine faucet failure is recorded as an external blocker rather than hidden.
+- [x] No contract address or transaction ID is fabricated.
+- [ ] Real Preprod write is finalised with concrete `contractAddress` + `transactionId`.
 
-## Explicitly deferred to V0.6 / production hardening
-- [ ] real Midnight Preprod contract deployment and transaction submission
-- [ ] verifiable Preprod contract address + transaction ID + confirmation/finality lifecycle
-- [ ] deployed persistent pilot API reachable by the public demo
-- [ ] HSM/KMS-backed issuer keys and rotation/revocation
-- [ ] mTLS / workload identity / service-to-service authorisation
-- [ ] durable database/event-store audit persistence across service restarts
-- [ ] Kafka broker integration rather than event-envelope simulation
-- [ ] HA, load, chaos, recovery and SLO validation
-- [ ] threat model, penetration testing and supply-chain remediation
+The unchecked item above is an inherited **external V0.6 deployment gate**, not a V0.7 control-plane acceptance failure. The current Preprod machine faucet returns HTTP 403 and the official public-network funding path requires a persistent funded test wallet.
+
+## Still production hardening, not claimed by V0.7
+- [ ] HSM/KMS-backed issuer key custody and rotation
+- [ ] mTLS/workload identity
+- [ ] real bank Kafka/payment integration
+- [ ] production HA/SLO/on-call validation
+- [ ] threat model / penetration test / dependency remediation
 - [ ] GDPR/DPIA, legal/compliance and model-risk governance
-- [ ] real fraud data, calibrated thresholds, drift monitoring and operational review workflows
-
-## Demo success condition
-A reviewer should understand within 60 seconds:
-1. the payment event arrives in a production-shaped envelope,
-2. raw customer source records are not required by policy,
-3. external services sign only the needed predicates,
-4. browser-side verification establishes attestation validity,
-5. PLONK proves the balance predicate without exposing the balance to policy,
-6. policy remains deterministic and fail-closed,
-7. the decision is recorded in a tamper-evident audit chain,
-8. Midnight Preprod is only probed read-only and no chain write is falsely claimed.
+- [ ] labelled production fraud outcomes and calibrated model/rule performance
+- [ ] autonomous customer-impacting decline/freeze actions
