@@ -1,69 +1,84 @@
-# ACCEPTANCE — V0.3
+# ACCEPTANCE — V0.4
 
 ## Product vertical slice
 - [x] Canonical €15k / new-device / new-recipient scenario exists.
-- [x] Evidence Planner requests trust claims.
-- [x] Privacy Guardian replaces an over-broad raw-balance request with `BALANCE_GT_TRANSFER`.
-- [x] Fraud scorer remains transparent.
-- [x] Deterministic policy owns the action boundary and fails closed when required proof is unavailable.
+- [x] A Kafka-compatible `payments.transaction.created` envelope carries event id, key, schema version and transaction id.
+- [x] Evidence Planner requests minimum trust claims.
+- [x] Privacy Guardian replaces raw-balance disclosure with `BALANCE_GT_TRANSFER`.
+- [x] Deterministic fraud policy owns the final action boundary.
 - [x] Step-up authentication can move CHALLENGE to APPROVED.
-- [x] Human-readable decision trace and explanation remain visible.
 
-## Privacy
-- [x] Synthetic balance is consumed only inside the local private proving boundary.
-- [x] Fraud/policy layers receive only the verified predicate outcome, never the raw balance.
-- [x] Raw balance is not rendered and is not written as public ledger state.
-- [x] Browser UI explicitly distinguishes proof generation from network submission.
+## Authorised attestations
+- [x] `KYC_VALID` is carried as an ES256-signed attestation.
+- [x] `ACCOUNT_AGE_GT_365` is carried as an ES256-signed attestation.
+- [x] `NO_ACTIVE_COMPROMISE` is carried as an ES256-signed attestation.
+- [x] Issuer registry enforces issuer + key-id trust.
+- [x] Issuer registry restricts which claims each issuer may sign.
+- [x] Attestations are bound to subject + transaction event.
+- [x] Expired attestations fail verification.
+- [x] Tampered attestations fail signature verification.
+- [x] Unknown issuer/key pairs fail verification.
+- [x] Demo issuer private keys are ephemeral/non-exportable and are not committed to the repository.
 
 ## Midnight / ZK
-- [x] Compact circuit binds request ID, transfer threshold, policy version and expiry.
-- [x] Replay protection is enforced.
-- [x] Insufficient balance fails separately from prover/infrastructure failures.
-- [x] Browser stages real proving/verifying keys, ZKIR and SRS slices.
-- [x] `@midnight-ntwrk/zkir-v2` generates the PLONK proof on demand in a module worker.
-- [x] Proof latency, proof size, correlation ID and proof digest are surfaced.
-- [x] Existing real PLONK checker suite remains green.
+- [x] V0.3 Compact/PLONK browser proof remains required for `BALANCE_GT_TRANSFER`.
+- [x] Request id, transfer threshold, policy version and expiry remain bound into the proof context.
+- [x] Replay/freshness/timeout failure semantics remain explicit.
+- [x] Policy receives the proof predicate rather than the private balance.
+- [x] UI continues to show `WITHHELD` for the private balance.
 
-## Reliability / authority
-- [x] Proof timeout and freshness budget are explicit.
-- [x] Retry behaviour is bounded.
-- [x] `PREDICATE_FALSE`, `REPLAY`, `STALE`, `PROVER_TIMEOUT`, `PROVER_UNAVAILABLE` and internal failures are distinguished.
-- [x] AI cannot decide whether a proof is valid.
+## Evidence provenance / authority
+- [x] Fraud engine distinguishes `signed-attestation` from `midnight-proof` evidence.
+- [x] Missing/invalid critical evidence is explicitly false and fails closed to REVIEW.
+- [x] AI does not verify signatures or cryptographic proofs.
 - [x] AI cannot directly approve, decline or freeze funds.
-- [x] Missing proof routes to REVIEW instead of being guessed.
+- [x] Human-readable trace identifies which boundary established each fact.
+
+## Durable pilot audit
+- [x] Pilot audit record contains event/transaction ids, correlation id, policy version, decision and risk score.
+- [x] Audit record contains evidence provenance/digests and proof latency.
+- [x] Raw-fields-disclosed metric is recorded.
+- [x] Browser audit store persists across refreshes.
+- [x] Storage boundary is explicit and replaceable; browser local storage is not represented as production-grade audit infrastructure.
+
+## Network truth
+- [x] Network adapter exposes explicit local / Preprod submission / confirmation / finality states.
+- [x] Submitted/confirmed/final state requires concrete contract address + transaction id.
+- [x] UI says `NOT SUBMITTED` / `PREPROD_NOT_CONFIGURED` until real chain evidence exists.
+- [x] Current official Preprod endpoints + deployment gate are documented in `docs/MIDNIGHT_PREPROD_RUNBOOK.md`.
+- [ ] Real Midnight Preprod contract address recorded.
+- [ ] Real Preprod transaction submitted and independently observed.
+- [ ] Confirmation/finality lifecycle implemented against the network.
 
 ## Engineering / ship
-- [x] Core web tests pass.
-- [x] Midnight simulator + PLONK checker suite passes.
-- [x] Production Vite build passes with the real WASM proof worker.
-- [x] Compiled proving assets are present in the production bundle.
-- [x] Headless Chromium smoke test loads the production build, clicks `Evaluate + prove`, generates a live proof and observes `✓ PROOF GENERATED`.
-- [x] Browser smoke verifies `WITHHELD` private-input UI and `NOT SUBMITTED` network truth boundary.
-- [x] PR CI and Midnight Contract workflows are green.
+- [x] Core fraud-policy tests pass.
+- [x] Signed-attestation success/tamper/expiry/unknown-issuer tests pass.
+- [x] Event, audit-store and network-truth tests pass.
+- [x] Production Vite build passes with browser WASM prover.
+- [x] Browser proof smoke generates a fresh PLONK proof.
+- [ ] V0.4 browser smoke explicitly asserts all three signed attestations + persistent audit record.
+- [ ] PR CI green on final V0.4 commit.
+- [ ] GitHub Pages V0.4 deployment green.
 
-## Explicitly deferred to production hardening / V0.4+
-- [ ] Midnight Preprod/Mainnet contract submission and finality handling.
-- [ ] production wallet/key custody and signer policy.
-- [ ] authorised external attestors for KYC / account tenure / compromise status.
-- [ ] revocation/status infrastructure for attestations.
-- [ ] production-grade observability, alerting, SLOs and incident runbooks.
-- [ ] durable audit/event storage with retention controls.
-- [ ] threat model + penetration test + dependency/security remediation.
+## Explicit production gaps
+- [ ] real external KYC/bank/fraud attestor adapters.
+- [ ] issuer onboarding, rotation, revocation and status infrastructure.
+- [ ] production wallet/key custody and signer policy (HSM/KMS/MPC or equivalent).
+- [ ] Kafka / payment-rail integration rather than the in-browser event adapter.
+- [ ] production append-only audit/event store with retention and access controls.
+- [ ] observability, alerting, SLOs and incident runbooks.
+- [ ] threat model, penetration test and dependency/security remediation.
 - [ ] privacy/DPIA, legal/compliance review and model-risk governance.
-- [ ] real fraud data, calibrated thresholds, offline/online evaluation and drift monitoring.
+- [ ] real fraud data, calibrated thresholds, evaluation and drift monitoring.
 - [ ] HA, load, chaos, recovery and regional-failure testing.
-
-## V0.3 evidence
-- Browser/prod CI run: `34947398290`
-- Midnight Contract run: `34947398287`
-- Evidence note: `evidence/V0.3_BROWSER_PROVING.md`
 
 ## Demo success condition
 A viewer should understand within 60 seconds:
-1. why the transaction is risky,
-2. why the raw balance is unnecessary,
-3. that the browser creates a fresh proof rather than replaying one,
-4. that policy waits for verified cryptographic evidence,
-5. that the raw private value is withheld from the decision layer,
-6. that no Midnight network submission is claimed yet,
-7. why the final financial action remains deterministic and bounded.
+1. which payment event entered the system,
+2. why the transaction is risky,
+3. which three facts came from authorised signed issuers,
+4. which fact came from live Compact/PLONK,
+5. what private information was withheld,
+6. who owns the final decision authority,
+7. that the audit survives a refresh,
+8. that Midnight Preprod submission is still explicitly not claimed.
