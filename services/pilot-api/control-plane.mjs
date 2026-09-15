@@ -21,10 +21,7 @@ function percentile(values, p) {
 }
 
 function normaliseClaims(claims = {}) {
-  return Object.fromEntries(REQUIRED_CLAIMS.map((claim) => [
-    claim,
-    typeof claims[claim] === 'boolean' ? claims[claim] : null,
-  ]));
+  return Object.fromEntries(REQUIRED_CLAIMS.map((claim) => [claim, typeof claims[claim] === 'boolean' ? claims[claim] : null]));
 }
 
 export function scoreOperationalRisk(event, claims) {
@@ -42,8 +39,7 @@ export function runPolicy(rawEvent, rawClaims) {
   const event = validateEvent(rawEvent);
   const claims = normaliseClaims(rawClaims);
   const missingClaims = REQUIRED_CLAIMS.filter((claim) => claims[claim] === null);
-  const failedCriticalClaims = ['KYC_VALID', 'NO_ACTIVE_COMPROMISE', 'BALANCE_GT_TRANSFER']
-    .filter((claim) => claims[claim] === false);
+  const failedCriticalClaims = ['KYC_VALID', 'NO_ACTIVE_COMPROMISE', 'BALANCE_GT_TRANSFER'].filter((claim) => claims[claim] === false);
   const riskScore = scoreOperationalRisk(event, claims);
 
   let decision;
@@ -62,15 +58,7 @@ export function runPolicy(rawEvent, rawClaims) {
     reasonCode = 'POLICY_REQUIREMENTS_SATISFIED';
   }
 
-  return {
-    policyVersion: POLICY_VERSION,
-    decision,
-    reasonCode,
-    riskScore,
-    claims,
-    missingClaims,
-    failedCriticalClaims,
-  };
+  return { policyVersion: POLICY_VERSION, decision, reasonCode, riskScore, claims, missingClaims, failedCriticalClaims };
 }
 
 function canonicalInput({ event, claims, provenance = {} }) {
@@ -118,7 +106,8 @@ export function evaluateDecision(state, request) {
   const existing = state.decisionsById.get(decisionId);
   if (existing) {
     state.controlMetrics.idempotentReplays += 1;
-    return { ...structuredClone(existing), idempotentReplay: true };
+    const { _request, ...publicReceipt } = existing;
+    return { ...structuredClone(publicReceipt), idempotentReplay: true };
   }
 
   const result = runPolicy(input.event, input.claims);
@@ -141,12 +130,7 @@ export function evaluateDecision(state, request) {
     failedCriticalClaims: result.failedCriticalClaims,
     rawFieldsDisclosed: 0,
   };
-  const receipt = {
-    ...decisionCore,
-    receiptHash: sha256Hex(decisionCore),
-    idempotentReplay: false,
-  };
-
+  const receipt = { ...decisionCore, receiptHash: sha256Hex(decisionCore), idempotentReplay: false };
   const latencyMs = Number((performance.now() - started).toFixed(2));
   receipt.decisionLatencyMs = latencyMs;
   state.decisionsById.set(decisionId, { ...receipt, _request: structuredClone(input) });
@@ -166,7 +150,6 @@ export function replayDecision(state, decisionId) {
   initialiseControlPlane(state);
   const stored = state.decisionsById.get(decisionId);
   if (!stored) return null;
-
   state.controlMetrics.explicitReplays += 1;
   const result = runPolicy(stored._request.event, stored._request.claims);
   const replayProjection = {
@@ -189,15 +172,7 @@ export function replayDecision(state, decisionId) {
   };
   const matchesOriginal = stableStringify(replayProjection) === stableStringify(originalProjection);
   if (!matchesOriginal) state.controlMetrics.replayMismatches += 1;
-
-  return {
-    decisionId,
-    replayedAt: new Date().toISOString(),
-    policyVersion: POLICY_VERSION,
-    matchesOriginal,
-    original: originalProjection,
-    replay: replayProjection,
-  };
+  return { decisionId, replayedAt: new Date().toISOString(), policyVersion: POLICY_VERSION, matchesOriginal, original: originalProjection, replay: replayProjection };
 }
 
 export function controlMetrics(state) {
@@ -217,11 +192,7 @@ export function controlMetrics(state) {
     idempotentReplays: m.idempotentReplays,
     explicitReplays: m.explicitReplays,
     replayMismatches: m.replayMismatches,
-    latencyMs: {
-      samples: m.latenciesMs.length,
-      p50: percentile(m.latenciesMs, 50),
-      p95: percentile(m.latenciesMs, 95),
-    },
+    latencyMs: { samples: m.latenciesMs.length, p50: percentile(m.latenciesMs, 50), p95: percentile(m.latenciesMs, 95) },
     truthBoundary: 'Challenge/review rates are operational decision metrics, not fraud precision, recall, or false-positive rate because no production ground-truth labels are present.',
   };
 }
