@@ -1,5 +1,5 @@
-export const PROOF_TTL_MS = 60_000;
-export const PROOF_TIMEOUT_MS = 25_000;
+export const PROOF_TTL_MS = 180_000;
+export const PROOF_TIMEOUT_MS = 60_000;
 export const PROOF_MAX_ATTEMPTS = 2;
 
 export type ProofFailureCode =
