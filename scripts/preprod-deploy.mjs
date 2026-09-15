@@ -5,7 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
 import { firstValueFrom, filter, timeout as rxTimeout } from 'rxjs';
 import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-js';
-import { LedgerParameters, unshieldedToken } from '@midnight-ntwrk/midnight-js-protocol/ledger';
+import {
+  DustSecretKey,
+  LedgerParameters,
+  ZswapSecretKeys,
+  unshieldedToken,
+} from '@midnight-ntwrk/midnight-js-protocol/ledger';
 import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
 import {
   createLogger,
@@ -82,11 +87,17 @@ async function createFundedWallet(environmentConfiguration, evidence) {
     .withSeed(masterSeed);
 
   const built = await builder.buildWithoutStarting();
+
+  // testkit-js 4.1.1 expects the wallet facade plus concrete protocol key
+  // objects here — not the WalletSeeds wrapper. Passing the wrapper causes the
+  // wallet WASM layer to reject sync updates with "expected instance of
+  // ZswapSecretKeys/DustSecretKey".
   const provider = await MidnightWalletProvider.withWallet(
     logger,
     environmentConfiguration,
     built.wallet,
-    built.seeds,
+    ZswapSecretKeys.fromSeed(built.seeds.shielded),
+    DustSecretKey.fromSeed(built.seeds.dust),
     built.keystore,
   );
 
@@ -161,7 +172,7 @@ async function createFundedWallet(environmentConfiguration, evidence) {
       const recipe = await provider.wallet.registerNightUtxosForDustGeneration(
         unregistered,
         provider.unshieldedKeystore.getPublicKey(),
-        (payload) => provider.unshieldedKeystore.signDataAsync(payload),
+        (payload) => provider.unshieldedKeystore.signData(payload),
       );
       const finalized = await provider.wallet.finalizeRecipe(recipe);
       evidence.wallet.dustRegistrationTxId = await provider.wallet.submitTransaction(finalized);
