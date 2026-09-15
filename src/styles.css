@@ -12,6 +12,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background:
   radial-gradient(circle at 85% 20%, rgba(102, 155, 255, .08), transparent 28%),
   #07090d; }
 button { font: inherit; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 
 .page-shell { width: min(1240px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
 .topbar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1b202a; padding-bottom: 18px; }
@@ -21,6 +22,10 @@ button { font: inherit; }
 .status-pill { margin-left: auto; color: #a7b0c0; border: 1px solid #232a36; border-radius: 999px; padding: 8px 12px; font-size: 12px; display: flex; gap: 8px; align-items: center; }
 .status-pill span { width: 7px; height: 7px; border-radius: 50%; background: #68f3ad; box-shadow: 0 0 18px #68f3ad; }
 .status-pill.verified { border-color: #285941; color: #b8f7d7; background: rgba(111, 240, 175, .035); }
+.status-pill.proving { border-color: #725e2d; color: #ffe2a0; }
+.status-pill.proving span { background: #ffd171; box-shadow: 0 0 18px #ffd171; animation: pulse 1.15s ease-in-out infinite; }
+.status-pill.failed { border-color: #66343a; color: #ff9ca7; }
+.status-pill.failed span { background: #ff7f8d; box-shadow: 0 0 14px #ff7f8d; }
 
 .hero { display: grid; grid-template-columns: 1.7fr .7fr; gap: 48px; padding: 88px 0 54px; align-items: end; }
 .hero h1 { font-size: clamp(46px, 7vw, 92px); line-height: .96; letter-spacing: -.055em; margin: 12px 0 24px; max-width: 920px; }
@@ -35,6 +40,8 @@ button { font: inherit; }
 .panel h2 { margin: 8px 0 0; font-size: 22px; letter-spacing: -.03em; }
 
 .zk-receipt { margin-bottom: 16px; padding: 26px; border-color: #285941; background: linear-gradient(135deg, rgba(111, 240, 175, .035), rgba(12, 15, 21, .92) 45%); }
+.zk-receipt.proof-proving { border-color: #705d2c; background: linear-gradient(135deg, rgba(255, 209, 113, .035), rgba(12, 15, 21, .92) 45%); }
+.zk-receipt.proof-failed { border-color: #66343a; background: linear-gradient(135deg, rgba(255, 127, 141, .035), rgba(12, 15, 21, .92) 45%); }
 .receipt-intro { display: grid; grid-template-columns: minmax(260px, .9fr) minmax(320px, 1.4fr); gap: 38px; align-items: end; padding-bottom: 24px; }
 .receipt-intro p { margin: 0; color: #8f9bad; line-height: 1.65; font-size: 13px; }
 .receipt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #26302e; border: 1px solid #26302e; }
@@ -44,8 +51,23 @@ button { font: inherit; }
 .receipt-grid .private-cell { background: repeating-linear-gradient(-45deg, #0a0e12, #0a0e12 8px, #0d1217 8px, #0d1217 16px); }
 .receipt-grid .private-cell strong { color: #ffd171; letter-spacing: .12em; }
 .receipt-grid .accepted-cell strong { color: #6ff0af; }
-.evidence-link { display: inline-block; margin-top: 16px; color: #87f3ba; font-size: 11px; text-decoration: none; border-bottom: 1px solid #315b47; padding-bottom: 3px; }
-.evidence-link:hover { color: #bcf9d7; }
+.proof-idle { min-height: 118px; border-top: 1px solid #1f2827; display: grid; place-items: center; align-content: center; gap: 8px; color: #8f9bad; text-align: center; }
+.proof-idle .pulse-ring { width: 28px; height: 28px; }
+.proof-idle small { color: #5e697a; }
+.proof-progress { border-top: 1px solid #3c3423; padding: 28px 8px 8px; display: flex; gap: 18px; align-items: center; }
+.proof-progress strong { display: block; color: #ffe0a0; }
+.proof-progress p { margin: 6px 0 0; color: #808b9d; font-size: 12px; line-height: 1.55; }
+.proof-spinner { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #2d3542; border-top-color: #6ff0af; animation: spin .8s linear infinite; flex: 0 0 auto; }
+.proof-progress .proof-spinner { border-top-color: #ffd171; }
+.proof-meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.proof-meta-grid > div { border: 1px solid #1d2530; background: #090c11; padding: 12px 14px; min-width: 0; }
+.proof-meta-grid span { display: block; color: #647184; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
+.proof-meta-grid code { display: block; color: #b8c1cf; font-size: 11px; overflow-wrap: anywhere; }
+.truth-boundary { margin: 14px 0 0; border-left: 2px solid #314e40; padding: 9px 12px; color: #788697; font-size: 11px; line-height: 1.55; }
+.truth-boundary strong { color: #a8b7c8; }
+.proof-failure { border-top: 1px solid #4c2d31; padding: 24px 4px 4px; color: #ff9ca7; }
+.proof-failure p { color: #a98e94; margin: 7px 0; }
+.proof-failure small { color: #75666a; }
 
 .workspace { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
 .scenario-card { padding: 26px; }
@@ -56,14 +78,17 @@ button { font: inherit; }
 .dot { width: 7px; height: 7px; border-radius: 50%; }
 .dot.ok { background: #6ff0af; }
 .dot.warn { background: #ffd171; }
-.primary, .challenge-box button { width: 100%; background: #6ff0af; color: #07100b; border: 0; padding: 14px 16px; font-weight: 850; cursor: pointer; transition: transform .16s ease, filter .16s ease; }
-.primary:hover, .challenge-box button:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.primary, .challenge-box button { width: 100%; background: #6ff0af; color: #07100b; border: 0; padding: 14px 16px; font-weight: 850; cursor: pointer; transition: transform .16s ease, filter .16s ease, opacity .16s ease; }
+.primary:hover:not(:disabled), .challenge-box button:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.primary:disabled { cursor: wait; opacity: .55; }
 .microcopy { color: #697487; font-size: 11px; line-height: 1.55; margin: 14px 0 0; }
 
 .trace-card { min-height: 560px; padding: 26px; }
 .panel-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
 .decision { font-size: 11px; letter-spacing: .12em; font-weight: 900; border: 1px solid #745b27; color: #ffd171; padding: 9px 11px; }
 .decision.approved { border-color: #245d43; color: #6ff0af; }
+.decision.proving { border-color: #3a4658; color: #91a0b6; }
+.decision.review { border-color: #69383e; color: #ff8f9b; }
 .empty-state { min-height: 430px; display: grid; place-items: center; align-content: center; gap: 20px; text-align: center; color: #667184; }
 .pulse-ring { width: 42px; height: 42px; border: 1px solid #344052; border-radius: 50%; box-shadow: 0 0 0 12px rgba(255,255,255,.015); }
 .trace-list { display: grid; gap: 0; margin-top: 28px; }
@@ -74,7 +99,6 @@ button { font: inherit; }
 .trace-index.blocked { border-color: #69383e; color: #ff8f9b; }
 .trace-row strong { display: block; font-size: 14px; margin: 4px 0; }
 .trace-row p { margin: 0; color: #818da0; font-size: 12px; line-height: 1.55; }
-.zk-trace-row { margin: 4px 0; padding: 17px 12px; border: 1px solid #285941; background: rgba(111,240,175,.025); }
 .challenge-box { border: 1px solid #745b27; background: rgba(255, 209, 113, .04); margin-top: 18px; padding: 18px; display: grid; grid-template-columns: 1fr 170px; gap: 20px; align-items: center; }
 .challenge-box strong { display: block; margin-top: 6px; }
 .challenge-box button { padding: 11px 14px; }
@@ -98,11 +122,14 @@ button { font: inherit; }
 .boundary-grid p { margin: 0; color: #748094; font-size: 12px; line-height: 1.5; }
 footer { display: flex; justify-content: space-between; color: #596477; font-size: 11px; padding: 34px 4px 0; }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; padding-top: 58px; }
   .north-star { border-left: 0; border-top: 1px solid #232a36; padding: 22px 0 0; }
   .receipt-intro { grid-template-columns: 1fr; gap: 14px; }
-  .receipt-grid { grid-template-columns: repeat(2, 1fr); }
+  .receipt-grid, .proof-meta-grid { grid-template-columns: repeat(2, 1fr); }
   .workspace { grid-template-columns: 1fr; }
   .metrics-grid, .boundary-grid { grid-template-columns: repeat(2, 1fr); }
   .explain { grid-template-columns: 1fr; }
@@ -112,7 +139,7 @@ footer { display: flex; justify-content: space-between; color: #596477; font-siz
   .page-shell { width: min(100% - 20px, 1240px); }
   .status-pill { display: none; }
   .hero h1 { font-size: 48px; }
-  .receipt-grid, .metrics-grid, .boundary-grid { grid-template-columns: 1fr; }
+  .receipt-grid, .proof-meta-grid, .metrics-grid, .boundary-grid { grid-template-columns: 1fr; }
   .challenge-box { grid-template-columns: 1fr; }
   footer { gap: 24px; flex-direction: column; }
 }
