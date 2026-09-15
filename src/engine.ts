@@ -36,11 +36,17 @@ export type Evaluation = {
   explanation: string;
 };
 
-export type VerifiedClaimInput = Partial<Record<ClaimKey, boolean>>;
+export type VerifiedEvidence = {
+  value: boolean;
+  source: 'midnight-proof' | 'signed-attestation';
+  issuer?: string;
+};
 
-// Synthetic provider-side data used by the browser demonstration only.
-// BALANCE_GT_TRANSFER is deliberately excluded from this source in V0.3: it
-// must arrive through the live Midnight proof boundary.
+export type VerifiedClaimInput = Partial<Record<ClaimKey, boolean | VerifiedEvidence>>;
+
+// Synthetic provider-side data remains for the legacy V0.3 UI path only.
+// The V0.4 pilot explicitly supplies all required claims and fails closed on
+// missing/invalid attestations rather than relying on these demo defaults.
 const syntheticPrivateData = {
   identity: { kyc: true },
   bank: { accountAgeDays: 920, activeCompromise: false },
@@ -111,6 +117,16 @@ export function syntheticClaimValue(claim: ClaimKey): boolean {
   }
 }
 
+function normaliseEvidence(value: boolean | VerifiedEvidence | undefined): VerifiedEvidence | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') {
+    // Backward-compatible V0.3 input: the only external boolean was the live
+    // BALANCE_GT_TRANSFER proof.
+    return { value, source: 'midnight-proof' };
+  }
+  return value;
+}
+
 export function scoreRisk(tx: Transaction, claims: Record<ClaimKey, boolean>): number {
   let score = 0.18;
   if (tx.amount >= 10_000) score += 0.28;
@@ -151,29 +167,44 @@ export function evaluateTransaction(
   const guarded = privacyGuard(planned);
   trace.push(...guarded.trace);
 
+  const provenance = new Map<ClaimKey, VerifiedEvidence | undefined>();
   const claims = Object.fromEntries(
     guarded.approved.map((request) => {
-      const value = request.claim in verifiedClaims
-        ? Boolean(verifiedClaims[request.claim])
-        : syntheticClaimValue(request.claim);
-      return [request.claim, value];
+      const external = normaliseEvidence(verifiedClaims[request.claim]);
+      provenance.set(request.claim, external);
+      return [request.claim, external ? external.value : syntheticClaimValue(request.claim)];
     }),
   ) as Record<ClaimKey, boolean>;
 
   for (const [claim, value] of Object.entries(claims) as [ClaimKey, boolean][]) {
-    const externallyVerified = claim in verifiedClaims;
+    const evidence = provenance.get(claim);
+    const actor = evidence?.source === 'signed-attestation'
+      ? 'Authorised Attestation'
+      : evidence?.source === 'midnight-proof'
+        ? 'Live Midnight Proof'
+        : 'Demo Evidence Provider';
+
+    let detail: string;
+    if (evidence?.source === 'signed-attestation') {
+      detail = value
+        ? `ES256 attestation verified against the authorised issuer registry${evidence.issuer ? ` (${evidence.issuer})` : ''}. Raw provider source fields were not passed to policy.`
+        : 'The attested claim failed or was unavailable; deterministic policy must fail closed.';
+    } else if (evidence?.source === 'midnight-proof') {
+      detail = value
+        ? 'On-demand Compact/PLONK proof generated in the browser WASM prover. The decision layer receives the predicate rather than the raw balance.'
+        : 'The cryptographic predicate did not pass or was unavailable.';
+    } else {
+      detail = value
+        ? 'Synthetic provider value passed. This is a legacy/demo evidence path, not an authorised production attestation.'
+        : claim === 'BALANCE_GT_TRANSFER'
+          ? 'No live funding-sufficiency proof was supplied. Deterministic policy must not treat this as verified.'
+          : 'Synthetic provider value failed.';
+    }
+
     trace.push({
-      actor: externallyVerified ? 'Live Midnight Proof' : 'Demo Evidence Provider',
+      actor,
       title: `${claim} ${value ? 'verified' : 'failed'}`,
-      detail: externallyVerified
-        ? value
-          ? 'On-demand Compact/PLONK proof generated in the browser WASM prover. The raw balance never crossed the private-state boundary.'
-          : 'The cryptographic predicate did not pass.'
-        : value
-          ? 'Synthetic provider attestation passed. This claim is intentionally labelled non-ZK in V0.3.'
-          : claim === 'BALANCE_GT_TRANSFER'
-            ? 'No live funding-sufficiency proof was supplied. Deterministic policy must not treat this as verified.'
-            : 'Synthetic provider attestation failed.',
+      detail,
       status: value ? 'ok' : 'warn',
     });
   }
@@ -184,7 +215,7 @@ export function evaluateTransaction(
   trace.push({
     actor: 'Fraud Engine',
     title: `Risk score ${riskScore.toFixed(2)}`,
-    detail: 'Risk combines transaction context with the available trust claims.',
+    detail: 'Risk combines transaction context with verified trust claims.',
     status: riskScore >= 0.55 ? 'warn' : 'ok',
   });
   trace.push({
@@ -199,6 +230,11 @@ export function evaluateTransaction(
     status: decision === 'APPROVE' ? 'ok' : 'warn',
   });
 
+  const signedAttestationCount = Array.from(provenance.values()).filter(
+    (evidence) => evidence?.source === 'signed-attestation' && evidence.value,
+  ).length;
+  const liveProof = provenance.get('BALANCE_GT_TRANSFER')?.source === 'midnight-proof' && claims.BALANCE_GT_TRANSFER;
+
   return {
     decision,
     riskScore,
@@ -208,7 +244,7 @@ export function evaluateTransaction(
     trace,
     explanation:
       decision === 'CHALLENGE'
-        ? 'The transfer is high-value, from a new device, and to a new recipient. Identity, account-tenure, and compromise checks are synthetic provider attestations; funding sufficiency arrived through the live Midnight Compact/PLONK proof boundary. Deterministic policy therefore requires step-up authentication rather than a decline.'
+        ? `The transfer is high-value, from a new device, and to a new recipient. ${signedAttestationCount} authorised signed attestations established identity/account/fraud facts${liveProof ? ', while live Compact/PLONK established funding sufficiency' : ''}. Deterministic policy therefore requires step-up authentication rather than a decline.`
         : 'The decision follows deterministic policy over available trust claims and transaction risk signals.',
   };
 }
