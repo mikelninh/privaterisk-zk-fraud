@@ -42,4 +42,4 @@ jobs:
           test -f dist/zk/keys/proveBalanceForTransfer.verifier
           test -f dist/zk/zkir/proveBalanceForTransfer.bzkir
           test -f dist/zk/manifest.json
-          find dist/zk/params -name 'params_*.bin' -print -quit | grep -q .
+          find dist/zk/params -name 'bls_midnight_2p*' -print -quit | grep -q .
