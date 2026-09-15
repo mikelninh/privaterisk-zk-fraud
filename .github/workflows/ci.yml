@@ -9,7 +9,7 @@ on:
 jobs:
   test-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,3 +43,20 @@ jobs:
           test -f dist/zk/zkir/proveBalanceForTransfer.bzkir
           test -f dist/zk/manifest.json
           find dist/zk/params -name 'bls_midnight_2p*' -print -quit | grep -q .
+
+      - name: Install Chromium for proof smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: Run live browser proof smoke
+        shell: bash
+        run: |
+          npm run preview -- --host 127.0.0.1 > /tmp/privaterisk-preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill $PREVIEW_PID || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/privaterisk-zk-fraud/ >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          npm run smoke:browser
