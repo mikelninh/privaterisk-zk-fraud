@@ -7,10 +7,10 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 env:
   PROOF_SERVER_VERSION: 8.0.3
+  PRIVATERISK_PUBLIC_API: https://htffcvdopavknnylbowl.supabase.co/functions/v1/privaterisk-v06
 
 jobs:
   deploy-preprod:
@@ -21,10 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Authenticate GHCR for Midnight proof server
-        shell: bash
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Install Compact toolchain
         shell: bash
@@ -38,6 +34,9 @@ jobs:
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
+
+      - name: Verify public HTTPS trust service
+        run: npm run test:public-service
 
       - name: Compile PrivateRisk Compact contract
         run: |
