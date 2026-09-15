@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run src/*.test.ts",
     "test:pilot-api": "node scripts/pilot-api-self-test.mjs",
+    "test:public-service": "node scripts/public-service-smoke.mjs",
     "pilot-api": "node services/pilot-api/server.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs",
     "midnight:compile": "compact compile contracts/midnight/privaterisk.compact contracts/midnight/managed/privaterisk",
