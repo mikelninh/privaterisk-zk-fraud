@@ -1,67 +1,79 @@
-# ARCHITECTURE — PrivateRisk
+# ARCHITECTURE — PrivateRisk V0.7
 
 ## Design rule
-Separate **reasoning**, **proof**, **prediction**, and **authority**.
+Separate **reasoning**, **evidence**, **proof**, **prediction**, **policy**, **operations**, and **authority**.
 
 ```text
-Transaction / Event
-        |
-        v
-Evidence Planner (agentic reasoning)
-        |
-        v
-Privacy Guardian (minimum necessary disclosure)
-        |
-        v
-ProofVerifier interface
-   |              |
-   v              v
-Mock V0.1      Midnight V0.2
-        |
-        v
-Fraud Scorer (risk estimate)
-        |
-        v
-Policy Engine (deterministic authority)
-        |
-   +----+-----+
-   |          |
-APPROVE   CHALLENGE / REVIEW
-               |
-               v
-          Human / step-up
+payments.transaction.created
+          |
+          v
+Evidence Planner / Privacy Guardian
+          |
+     +----+------------------+
+     |                       |
+ES256 trust attestations   Compact/PLONK predicate
+     |                       |
+     +-----------+-----------+
+                 v
+         Browser verification
+                 |
+                 v
+      Local deterministic policy
+                 |
+                 +----------------------+
+                 |                      |
+                 v                      v
+       V0.7 Control Plane         mismatch => FAIL CLOSED
+                 |
+          +------+------+----------------+
+          |             |                |
+   Decision receipt   Audit chain     Metrics
+          |             |                |
+          +-------> deterministic replay |
+                        |
+                        v
+              APPROVE / CHALLENGE / REVIEW
+                        |
+                        v
+                  human / step-up
 ```
 
-## Trust boundaries
+## V0.7 control plane
+The control plane is deliberately not a second AI model. It is a deterministic operational boundary around the fraud decision.
 
-### Evidence Planner
-May infer which claims are useful from transaction context. It cannot assert that a claim is true and cannot execute money movement.
+For each input it creates:
+- `inputHash` over the versioned event, normalised claims and provenance
+- deterministic `decisionId`
+- explicit `policyVersion`
+- decision + reason code + risk score
+- claim/provenance snapshot
+- `receiptHash`
+- decision latency
+- linked hash-chain audit entry
 
-### Privacy Guardian
-Checks whether a requested datum is necessary. Whenever policy can operate on a predicate, it should prefer a claim such as `BALANCE_GT_TRANSFER` over a raw balance.
+An identical input is idempotent. A stored decision can be replayed from its original canonical input and compared against the original policy projection.
 
-### ProofVerifier
-Stable interface between business logic and cryptographic implementation. V0.1 is explicitly a mock implementation. V0.2 should connect Compact/Midnight proof generation and verification without changing the downstream policy contract.
+## Dual calculation as a safety check
+The browser computes the policy outcome locally after verifying attestations/proof. The external control plane independently computes the same deterministic policy. A disagreement is treated as an integration/policy-version fault and fails closed rather than selecting an answer opportunistically.
 
-### Fraud Scorer
-Produces a risk estimate. It is not the final authority. V0.1 is intentionally transparent and deterministic; a future model may replace it behind the same interface.
+## Public service
+The existing stable Supabase Edge Function endpoint remains the public HTTP boundary. Its implementation advertises semantic version `0.7.0` and adds decision/replay/metrics routes while keeping V0.6 attestation, audit and network-health routes compatible.
 
-### Policy Engine
-Owns action authority. Inputs are verified claims plus risk signals. Outputs are a constrained enum: APPROVE, CHALLENGE, REVIEW.
+The public Edge Function is still pilot infrastructure:
+- issuer keys are process/isolate scoped, not HSM/KMS-backed
+- decision/audit state is process/isolate memory, not durable storage
+- no production SLO/HA claim is made
 
-## On-chain / off-chain boundary
-Keep PII, raw balances, complete transaction histories, device histories, and model features off-chain. Use the chain only where independent proof verification or auditable state materially improves the system.
+## Midnight boundary
+Compact/PLONK remains the privacy proof path for `BALANCE_GT_TRANSFER`. Midnight Preprod connectivity remains separate from deployment truth. A node/indexer health check does not establish that a contract write happened. Only the dedicated Preprod deployment evidence may supply a real contract address and transaction identifier.
 
-## Midnight integration direction
-Midnight's developer model supports selective disclosure and zero-knowledge proofs with Compact smart contracts and TypeScript DApp integration. PrivateRisk should use this for predicate proofs, not as a database for banking data.
+## Authority
+- reasoning layer: may request evidence
+- cryptography: may establish evidence validity
+- fraud scorer: may estimate risk
+- deterministic policy: may recommend `APPROVE`, `CHALLENGE`, `REVIEW`
+- control plane: may record/replay/monitor that recommendation
+- human/bank systems: retain authority for consequential customer or money movement actions
 
-Target first circuit/predicate set:
-- KYC status is valid according to an authorised attestor.
-- account age exceeds threshold.
-- no active compromise flag exists according to an authorised fraud-data provider.
-- balance/funding exceeds transaction threshold without revealing the raw balance.
-
-## Event-driven direction
-V0.2+ can introduce an event gateway (Kafka-compatible abstraction): transaction.received → evidence.requested → proof.verified → risk.scored → decision.made → challenge.completed.
-
-Idempotency, correlation IDs, replay safety, schema evolution, and observability become acceptance requirements once asynchronous processing is introduced.
+## Production direction after V0.7
+Durable event/audit storage, Kafka integration, HSM/KMS key custody, service identity/mTLS, schema registry/data contracts, SLOs/alerts, labelled fraud outcomes, champion/challenger rule/model governance and controlled policy rollout.
