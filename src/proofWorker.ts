@@ -31,7 +31,7 @@ const keyProvider = {
     return { proverKey, verifierKey, ir };
   },
   async getParams(k: number) {
-    return fetchBytes(`params/params_${k}.bin`);
+    return fetchBytes(`params/bls_midnight_2p${k}`);
   },
 };
 
