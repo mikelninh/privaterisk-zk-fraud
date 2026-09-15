@@ -5,17 +5,22 @@ on:
     branches: [build/v0.6-preprod]
   workflow_dispatch:
 
+concurrency:
+  group: privaterisk-v06-preprod-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 env:
   PROOF_SERVER_VERSION: 8.0.3
   PRIVATERISK_PUBLIC_API: https://htffcvdopavknnylbowl.supabase.co/functions/v1/privaterisk-v06
+  NODE_OPTIONS: --max-old-space-size=6144
 
 jobs:
   deploy-preprod:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,6 +50,7 @@ jobs:
 
       - name: Deploy to Midnight Preprod
         id: deploy
+        timeout-minutes: 10
         shell: bash
         run: |
           set +e
