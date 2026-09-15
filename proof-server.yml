@@ -2,15 +2,14 @@ services:
   proof-server:
     image: "midnightntwrk/proof-server:${PROOF_SERVER_VERSION}"
     container_name: "proof-server_$TESTCONTAINERS_UID"
-    command: [ 'midnight-proof-server --network preprod --verbose' ]
+    command: ["midnight-proof-server", "--network", "preprod"]
     ports:
       - "0:6300"
     environment:
-      EXTRA_ARGS: -v
       RUST_BACKTRACE: "full"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:6300/version" ]
-      interval: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:6300/version"]
+      interval: 5s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 6
+      start_period: 5s
