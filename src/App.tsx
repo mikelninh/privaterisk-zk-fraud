@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { evaluateTransaction } from './engine';
+import { generateLiveBalanceProof, type LiveProofReceipt, type LiveProofFailure } from './liveProof';
 
 const tx = {
   amount: 15000,
@@ -8,43 +9,70 @@ const tx = {
   newRecipient: true,
 };
 
-const plonkReceipt = {
-  network: 'Midnight',
-  compiler: 'Compact 0.31.1',
-  runtime: '0.16.0',
-  circuit: 'proveBalanceForTransfer',
-  threshold: '€15,000',
-  privateInput: 'WITHHELD',
-  verifier: 'PLONK / ZKIR',
-  status: 'ACCEPTED',
-  run: '34906492162',
-  runUrl: 'https://github.com/mikelninh/privaterisk-zk-fraud/actions/runs/34906492162',
-};
+type ProofStatus = 'idle' | 'proving' | 'verified' | 'failed';
 
 export default function App() {
   const [ran, setRan] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
-  const result = useMemo(() => evaluateTransaction(tx), []);
+  const [proofStatus, setProofStatus] = useState<ProofStatus>('idle');
+  const [receipt, setReceipt] = useState<LiveProofReceipt | null>(null);
+  const [proofFailure, setProofFailure] = useState<LiveProofFailure | null>(null);
 
-  const finalDecision = authenticated && result.decision === 'CHALLENGE' ? 'APPROVED' : result.decision;
+  const result = useMemo(
+    () => evaluateTransaction(tx, receipt?.accepted ? { BALANCE_GT_TRANSFER: true } : {}),
+    [receipt],
+  );
+
+  const finalDecision = proofStatus === 'failed'
+    ? 'REVIEW'
+    : authenticated && result.decision === 'CHALLENGE'
+      ? 'APPROVED'
+      : proofStatus === 'verified'
+        ? result.decision
+        : 'PROVING';
+
+  async function evaluate() {
+    setRan(true);
+    setAuthenticated(false);
+    setReceipt(null);
+    setProofFailure(null);
+    setProofStatus('proving');
+
+    const proof = await generateLiveBalanceProof(tx.amount);
+    if (proof.accepted) {
+      setReceipt(proof);
+      setProofStatus('verified');
+    } else {
+      setProofFailure(proof);
+      setProofStatus('failed');
+    }
+  }
+
+  const statusText = proofStatus === 'proving'
+    ? 'PLONK proving…'
+    : proofStatus === 'verified'
+      ? 'Live proof generated'
+      : proofStatus === 'failed'
+        ? 'Proof unavailable'
+        : 'Browser prover ready';
 
   return (
     <main className="page-shell">
       <header className="topbar">
         <div className="brandmark">PR</div>
         <div>
-          <div className="eyebrow">PRIVATERISK / V0.2</div>
+          <div className="eyebrow">PRIVATERISK / V0.3</div>
           <div className="brand-title">Agentic ZK Fraud Decisioning</div>
         </div>
-        <div className="status-pill verified"><span /> Midnight PLONK verified</div>
+        <div className={`status-pill ${proofStatus}`}><span /> {statusText}</div>
       </header>
 
       <section className="hero">
         <div>
-          <p className="eyebrow">VERIFIED TRUST · MINIMUM DISCLOSURE</p>
-          <h1>Make a financial decision.<br /><em>Not a data grab.</em></h1>
+          <p className="eyebrow">AGENTIC SELECTIVE DISCLOSURE · LIVE ZK</p>
+          <h1>Ask for proof.<br /><em>Not the private data.</em></h1>
           <p className="hero-copy">
-            An evidence-planning agent asks for the minimum facts required. The privacy guardian blocks over-broad requests. A real Midnight Compact predicate proves funding sufficiency. Deterministic policy decides.
+            The evidence planner asks for the minimum facts required. The privacy guardian blocks the raw-balance request. V0.3 now generates the funding-sufficiency PLONK proof on demand in your browser before deterministic fraud policy can consume the claim.
           </p>
         </div>
         <div className="north-star">
@@ -55,25 +83,64 @@ export default function App() {
         </div>
       </section>
 
-      <section className="zk-receipt panel">
+      <section className={`zk-receipt panel proof-${proofStatus}`}>
         <div className="receipt-intro">
-          <div className="panel-kicker">V0.2 / REAL ZK EVIDENCE</div>
-          <h2>Private balance. Public threshold. Verifiable result.</h2>
+          <div className="panel-kicker">V0.3 / ON-DEMAND MIDNIGHT PROVING</div>
+          <h2>Private witness → live PLONK proof → policy input.</h2>
           <p>
-            The balance predicate is compiled from Compact with real PLONK proving/verifying keys and accepted by Midnight's ZKIR checker. The browser replays that verified outcome; it does not pretend to generate the proof live.
+            The synthetic balance stays inside Compact private state. The public proof context carries only the €15,000 threshold, a one-time request ID, policy version and expiry. Browser WASM proving is real; chain submission is deliberately not claimed yet.
           </p>
         </div>
-        <div className="receipt-grid">
-          <div><span>CIRCUIT</span><strong>{plonkReceipt.circuit}</strong></div>
-          <div><span>PUBLIC THRESHOLD</span><strong>{plonkReceipt.threshold}</strong></div>
-          <div className="private-cell"><span>PRIVATE BALANCE</span><strong>{plonkReceipt.privateInput}</strong></div>
-          <div><span>VERIFIER</span><strong>{plonkReceipt.verifier}</strong></div>
-          <div><span>COMPACT</span><strong>{plonkReceipt.compiler}</strong></div>
-          <div className="accepted-cell"><span>CHECKER VERDICT</span><strong>✓ {plonkReceipt.status}</strong></div>
-        </div>
-        <a className="evidence-link" href={plonkReceipt.runUrl} target="_blank" rel="noreferrer">
-          Inspect verification run #{plonkReceipt.run} ↗
-        </a>
+
+        {proofStatus === 'idle' && (
+          <div className="proof-idle">
+            <span className="pulse-ring" />
+            <strong>Ready to generate a fresh proof.</strong>
+            <small>No proof receipt is replayed from CI in V0.3.</small>
+          </div>
+        )}
+
+        {proofStatus === 'proving' && (
+          <div className="proof-progress">
+            <div className="proof-spinner" />
+            <div>
+              <strong>Generating PLONK proof locally…</strong>
+              <p>Loading ZKIR + proving key + SRS parameters. Private balance remains inside the circuit witness.</p>
+            </div>
+          </div>
+        )}
+
+        {receipt && (
+          <>
+            <div className="receipt-grid">
+              <div><span>CIRCUIT</span><strong>{receipt.circuit}</strong></div>
+              <div><span>PUBLIC THRESHOLD</span><strong>€{receipt.transferAmount.toLocaleString()}</strong></div>
+              <div className="private-cell"><span>PRIVATE BALANCE</span><strong>WITHHELD</strong></div>
+              <div><span>PROVER</span><strong>Browser WASM</strong></div>
+              <div><span>PROOF LATENCY</span><strong>{receipt.totalMs} ms</strong></div>
+              <div className="accepted-cell"><span>LOCAL RESULT</span><strong>✓ PROOF GENERATED</strong></div>
+            </div>
+            <div className="proof-meta-grid">
+              <div><span>Correlation</span><code>{receipt.correlationId}</code></div>
+              <div><span>Policy</span><code>{receipt.policyVersion}</code></div>
+              <div><span>Proof SHA-256</span><code>{receipt.proofSha256.slice(0, 20)}…</code></div>
+              <div><span>Proof size</span><code>{receipt.proofBytes.toLocaleString()} bytes</code></div>
+              <div><span>Attempts</span><code>{receipt.attempts}</code></div>
+              <div><span>Network submit</span><code>NOT SUBMITTED</code></div>
+            </div>
+            <p className="truth-boundary">
+              <strong>Truth boundary:</strong> proof generation and constraint checking happen live in-browser. This build does not claim Midnight Preprod/Mainnet settlement or network verification.
+            </p>
+          </>
+        )}
+
+        {proofFailure && (
+          <div className="proof-failure">
+            <strong>{proofFailure.code}</strong>
+            <p>{proofFailure.message}</p>
+            <small>Fail-closed: deterministic policy routes the transaction to REVIEW instead of guessing.</small>
+          </div>
+        )}
       </section>
 
       <section className="workspace">
@@ -87,17 +154,17 @@ export default function App() {
             <div><span className="dot ok" />KYC on file</div>
             <div><span className="dot ok" />Established account</div>
           </div>
-          <button className="primary" onClick={() => { setRan(true); setAuthenticated(false); }}>
-            {ran ? 'Run again' : 'Evaluate transaction'}
+          <button className="primary" disabled={proofStatus === 'proving'} onClick={evaluate}>
+            {proofStatus === 'proving' ? 'Generating proof…' : ran ? 'Run fresh proof' : 'Evaluate + prove'}
           </button>
-          <p className="microcopy">Synthetic data only. No personal financial information leaves the provider boundary.</p>
+          <p className="microcopy">Synthetic data only. The raw balance is never rendered, logged, or sent to the proof worker.</p>
         </aside>
 
         <section className="trace-card panel">
           <div className="panel-heading">
             <div>
               <div className="panel-kicker">02 / DECISION TRACE</div>
-              <h2>Why did the system decide?</h2>
+              <h2>Who is allowed to decide?</h2>
             </div>
             {ran && <div className={`decision ${finalDecision.toLowerCase()}`}>{finalDecision}</div>}
           </div>
@@ -105,7 +172,31 @@ export default function App() {
           {!ran ? (
             <div className="empty-state">
               <div className="pulse-ring" />
-              <p>Run the transaction to inspect the full evidence and policy trace.</p>
+              <p>Run the transaction to generate a fresh proof and inspect the full decision trace.</p>
+            </div>
+          ) : proofStatus === 'proving' ? (
+            <div className="empty-state">
+              <div className="proof-spinner" />
+              <p>Policy is waiting. A missing cryptographic claim is never silently replaced by an AI guess.</p>
+            </div>
+          ) : proofStatus === 'failed' ? (
+            <div className="trace-list">
+              <div className="trace-row">
+                <div className="trace-index blocked">ZK</div>
+                <div>
+                  <div className="trace-meta">Proof Boundary</div>
+                  <strong>Funding sufficiency unavailable</strong>
+                  <p>{proofFailure?.message} The transaction is routed to human review.</p>
+                </div>
+              </div>
+              <div className="trace-row">
+                <div className="trace-index warn">P</div>
+                <div>
+                  <div className="trace-meta">Policy Engine</div>
+                  <strong>REVIEW</strong>
+                  <p>Fail-closed because a required proof did not reach VERIFIED state.</p>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="trace-list">
@@ -119,14 +210,6 @@ export default function App() {
                   </div>
                 </div>
               ))}
-              <div className="trace-row zk-trace-row">
-                <div className="trace-index ok">ZK</div>
-                <div>
-                  <div className="trace-meta">Midnight / Compact / PLONK</div>
-                  <strong>BALANCE_GT_TRANSFER cryptographically checked</strong>
-                  <p>Real V0.2 checker evidence: the private witness satisfies the €15,000 public threshold. Raw balance remains outside public ledger state.</p>
-                </div>
-              </div>
               {result.decision === 'CHALLENGE' && !authenticated && (
                 <div className="challenge-box">
                   <div>
@@ -144,13 +227,13 @@ export default function App() {
         </section>
       </section>
 
-      {ran && (
+      {receipt && (
         <>
           <section className="metrics-grid">
-            <div className="metric-card"><span>Risk score</span><strong>{result.riskScore.toFixed(2)}</strong><small>policy input</small></div>
-            <div className="metric-card glow"><span>Raw fields disclosed</span><strong>{result.rawFieldsDisclosed}</strong><small>minimum disclosure</small></div>
-            <div className="metric-card"><span>Claims verified</span><strong>{Object.values(result.claims).filter(Boolean).length}</strong><small>trust evidence</small></div>
-            <div className="metric-card"><span>Real ZK predicates</span><strong>1</strong><small>Midnight PLONK verified</small></div>
+            <div className="metric-card"><span>Risk score</span><strong>{result.riskScore.toFixed(2)}</strong><small>deterministic policy input</small></div>
+            <div className="metric-card glow"><span>Raw fields disclosed</span><strong>{result.rawFieldsDisclosed}</strong><small>browser decision flow</small></div>
+            <div className="metric-card"><span>Live ZK predicates</span><strong>1</strong><small>generated on demand</small></div>
+            <div className="metric-card"><span>PLONK proving</span><strong>{receipt.proveMs}</strong><small>milliseconds</small></div>
           </section>
 
           <section className="explain panel">
@@ -165,16 +248,16 @@ export default function App() {
             <div className="panel-kicker">AUTHORITY BOUNDARIES</div>
             <div className="boundary-grid">
               <div><span>AGENT</span><strong>Requests evidence</strong><p>Reasoning and orchestration only.</p></div>
-              <div><span>PROOFS</span><strong>Establish facts</strong><p>Compact + PLONK verifies predicates; AI cannot override them.</p></div>
-              <div><span>RISK</span><strong>Estimates likelihood</strong><p>Statistical signal, not authority.</p></div>
-              <div><span>POLICY</span><strong>Permits actions</strong><p>Deterministic control boundary.</p></div>
+              <div><span>PROOF</span><strong>Establishes a fact</strong><p>Compact + PLONK; raw balance stays private.</p></div>
+              <div><span>RISK</span><strong>Estimates likelihood</strong><p>Statistical signal, never final authority.</p></div>
+              <div><span>POLICY</span><strong>Permits actions</strong><p>Fail-closed deterministic control boundary.</p></div>
             </div>
           </section>
         </>
       )}
 
       <footer>
-        <span>PrivateRisk</span>
+        <span>PrivateRisk V0.3</span>
         <span>Trust shouldn't require surrendering all your information.</span>
       </footer>
     </main>
