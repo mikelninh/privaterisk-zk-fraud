@@ -99,7 +99,7 @@ A future version may only show `SUBMITTED`, `CONFIRMED` or `FINAL` after a verif
 
 ## Verification
 
-CI now covers:
+CI covers:
 
 - core fraud-policy tests
 - signed-attestation tamper / expiry / unknown-issuer cases
@@ -110,6 +110,8 @@ CI now covers:
 - real Chromium decision flow through **HTTP service → attestations → PLONK proof → policy → server audit**
 - audit integrity endpoint after the browser decision
 - explicit `WITHHELD`, `EXTERNAL HTTP`, `CHAIN VERIFIED`, and `WRITE STATE: NOT CONFIGURED` truth boundaries
+
+Verification evidence: [`evidence/V0.5_EXTERNAL_SERVICE.md`](evidence/V0.5_EXTERNAL_SERVICE.md)
 
 ## Run the full V0.5 pilot locally
 
@@ -150,7 +152,7 @@ See `.ai-build/` for acceptance criteria and operating guardrails.
 - **V0.2** — real Midnight Compact / PLONK funding predicate ✅
 - **V0.3** — live/on-demand browser proving ✅
 - **V0.4** — signed attestations + event contract + browser pilot audit ✅
-- **V0.5** — external trust service + hash-chain audit + Preprod read probe 🚧
+- **V0.5** — external trust service + hash-chain audit + Preprod read probe ✅
 - **V0.6** — real Midnight Preprod submission/confirmation + deployed external service
 - **Production hardening** — HSM/KMS, mTLS/service identity, durable storage, HA/SLOs, observability, security/compliance, real fraud data and model/rule governance
 
