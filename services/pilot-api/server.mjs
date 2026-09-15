@@ -1,9 +1,24 @@
 import http from 'node:http';
-import { createPilotServiceState, issueForEvent, appendAudit, listAudit, publicRegistry, verifyAuditChain } from './core.mjs';
+import {
+  createPilotServiceState,
+  issueForEvent,
+  appendAudit,
+  listAudit,
+  publicRegistry,
+  verifyAuditChain,
+} from './core.mjs';
+import {
+  POLICY_VERSION,
+  controlMetrics,
+  evaluateDecision,
+  getDecision,
+  initialiseControlPlane,
+  replayDecision,
+} from './control-plane.mjs';
 
 const PORT = Number(process.env.PORT ?? '8787');
 const HOST = process.env.HOST ?? '127.0.0.1';
-const state = createPilotServiceState();
+const state = initialiseControlPlane(createPilotServiceState());
 
 const PREPROD = {
   node: 'https://rpc.preprod.midnight.network',
@@ -69,10 +84,42 @@ async function preprodProbe() {
     checkedAt: new Date().toISOString(),
     node: { endpoint: PREPROD.node, ...node },
     indexer: { endpoint: PREPROD.indexer, ...indexer },
-    writeState: 'NOT_CONFIGURED',
+    writeState: 'EXTERNAL_DEPLOYMENT_GATE',
     contractAddress: null,
     transactionId: null,
-    note: 'Read-only connectivity only. No wallet signer is configured and no chain submission is claimed.',
+    note: 'This service performs read-only health checks. Chain write truth comes only from the dedicated deployment evidence artifact.',
+  };
+}
+
+async function createAuditedDecision(body) {
+  const receipt = evaluateDecision(state, body);
+  const auditId = `audit_${receipt.receiptHash.slice(0, 24)}`;
+  const audit = await appendAudit(state, {
+    idempotencyKey: `decision:${receipt.decisionId}`,
+    record: {
+      auditId,
+      eventId: receipt.eventId,
+      transactionId: receipt.transactionId,
+      correlationId: receipt.decisionId,
+      createdAt: receipt.evaluatedAt,
+      policyVersion: receipt.policyVersion,
+      decision: receipt.decision,
+      reasonCode: receipt.reasonCode,
+      riskScore: receipt.riskScore,
+      rawFieldsDisclosed: receipt.rawFieldsDisclosed,
+      receiptHash: receipt.receiptHash,
+      evidence: Object.entries(receipt.provenance).map(([claim, provenance]) => ({ claim, provenance })),
+    },
+  });
+  return {
+    receipt,
+    audit: {
+      hash: audit.entry.hash,
+      previousHash: audit.entry.previousHash,
+      index: audit.entry.index,
+      integrity: audit.integrity,
+      idempotentReplay: audit.idempotentReplay,
+    },
   };
 }
 
@@ -88,8 +135,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/health') {
       return json(res, 200, {
         service: 'privaterisk-pilot-api',
-        version: '0.5.0',
-        mode: 'external-http',
+        version: '0.7.0',
+        policyVersion: POLICY_VERSION,
+        mode: 'operational-control-plane',
         startedAt: state.startedAt,
         uptimeSeconds: Math.round(process.uptime()),
       });
@@ -102,6 +150,26 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/v1/attestations') {
       const { event } = await readJson(req);
       return json(res, 200, issueForEvent(state, event));
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/decisions') {
+      return json(res, 200, await createAuditedDecision(await readJson(req)));
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/metrics') {
+      return json(res, 200, controlMetrics(state));
+    }
+
+    const decisionMatch = url.pathname.match(/^\/v1\/decisions\/([^/]+)$/);
+    if (req.method === 'GET' && decisionMatch) {
+      const receipt = getDecision(state, decodeURIComponent(decisionMatch[1]));
+      return receipt ? json(res, 200, { receipt }) : json(res, 404, { error: 'DECISION_NOT_FOUND' });
+    }
+
+    const replayMatch = url.pathname.match(/^\/v1\/decisions\/([^/]+)\/replay$/);
+    if (req.method === 'POST' && replayMatch) {
+      const replay = replayDecision(state, decodeURIComponent(replayMatch[1]));
+      return replay ? json(res, 200, replay) : json(res, 404, { error: 'DECISION_NOT_FOUND' });
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/audit') {
@@ -132,5 +200,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`PrivateRisk pilot API listening on http://${HOST}:${PORT}`);
+  console.log(`PrivateRisk V0.7 control plane listening on http://${HOST}:${PORT}`);
 });
