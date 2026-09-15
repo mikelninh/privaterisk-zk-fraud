@@ -1,11 +1,10 @@
 pragma language_version >= 0.22 && <= 0.23;
 import CompactStandardLibrary;
 
-// PrivateRisk V0.2
+// PrivateRisk V0.3
 // Prove that a private balance is sufficient for a specific transfer
-// without revealing the raw balance. The request id and transfer amount
-// are disclosed to bind the proof to an explicit policy context and prevent
-// replay of the same request.
+// without revealing the raw balance. Public request context binds the proof
+// to an explicit transfer threshold, policy version, and expiry.
 
 witness privateBalance(): Uint<64>;
 
@@ -14,14 +13,28 @@ export ledger proofCount: Counter;
 
 export circuit proveBalanceForTransfer(
   requestId: Bytes<32>,
-  transferAmount: Uint<64>
+  transferAmount: Uint<64>,
+  policyVersion: Bytes<32>,
+  expiresAtEpochMs: Uint<64>
 ): [] {
   const publicRequestId = disclose(requestId);
   const publicTransferAmount = disclose(transferAmount);
+  const publicPolicyVersion = disclose(policyVersion);
+  const publicExpiresAtEpochMs = disclose(expiresAtEpochMs);
 
   assert(
     !verifiedRequests.member(publicRequestId),
     "PrivateRisk request has already been used"
+  );
+
+  assert(
+    publicPolicyVersion != default<Bytes<32>>,
+    "PrivateRisk policy version is required"
+  );
+
+  assert(
+    publicExpiresAtEpochMs > 0,
+    "PrivateRisk proof expiry is required"
   );
 
   const balance = privateBalance();

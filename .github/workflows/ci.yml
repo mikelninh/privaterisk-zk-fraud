@@ -2,18 +2,61 @@ name: CI
 
 on:
   push:
-    branches: [main, build/v0.1-vertical-slice]
+    branches: [main, build/v0.3-live-proving]
   pull_request:
     branches: [main]
 
 jobs:
   test-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+
+      - name: Install Compact toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          compact update 0.31.1
+          compact compile --version
+
+      - name: Compile Midnight contract
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          npm run midnight:compile
+
+      - run: npm install --legacy-peer-deps
       - run: npm test
+      - run: npm run midnight:stage
       - run: npm run build
+
+      - name: Assert browser proving assets
+        run: |
+          test -f dist/zk/keys/proveBalanceForTransfer.prover
+          test -f dist/zk/keys/proveBalanceForTransfer.verifier
+          test -f dist/zk/zkir/proveBalanceForTransfer.bzkir
+          test -f dist/zk/manifest.json
+          find dist/zk/params -name 'bls_midnight_2p*' -print -quit | grep -q .
+
+      - name: Install Chromium for proof smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: Run live browser proof smoke
+        shell: bash
+        run: |
+          npm run preview -- --host 127.0.0.1 > /tmp/privaterisk-preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill $PREVIEW_PID || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/privaterisk-zk-fraud/ >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          npm run smoke:browser

@@ -17,12 +17,31 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+
+      - name: Install Compact toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          compact update 0.31.1
+
+      - run: npm install --legacy-peer-deps
+
+      - name: Compile and stage Midnight browser prover
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          npm run midnight:compile
+          npm run midnight:stage
+
       - run: npm test
       - run: npm run build
       - uses: actions/configure-pages@v5
@@ -31,6 +50,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
   deploy:
     environment:
       name: github-pages
