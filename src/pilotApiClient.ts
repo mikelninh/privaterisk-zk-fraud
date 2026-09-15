@@ -1,8 +1,11 @@
 import type { FraudEventEnvelope } from './eventEnvelope';
 import type { AuditRecord } from './auditStore';
+import type { ClaimKey } from './engine';
 import type { IssuerRegistryEntry, SignedAttestation } from './attestations';
 
+// Stable public endpoint. The implementation advertises its semantic version via /health.
 export const PUBLIC_V06_API = 'https://htffcvdopavknnylbowl.supabase.co/functions/v1/privaterisk-v06';
+export const CONTROL_PLANE_POLICY = 'privaterisk-policy-v0.7';
 
 export type RemoteEvidenceBundle = {
   service: string;
@@ -33,14 +36,79 @@ export type RemoteAuditReceipt = {
   storage?: string;
 };
 
+export type RemoteDecisionReceipt = {
+  schemaVersion: 'privaterisk-decision-receipt-v1';
+  decisionId: string;
+  inputHash: string;
+  eventId: string;
+  transactionId: string;
+  subjectId: string;
+  evaluatedAt: string;
+  policyVersion: string;
+  decision: 'APPROVE' | 'CHALLENGE' | 'REVIEW';
+  reasonCode: string;
+  riskScore: number;
+  claims: Record<ClaimKey, boolean | null>;
+  provenance: Record<ClaimKey, string | null>;
+  missingClaims: ClaimKey[];
+  failedCriticalClaims: ClaimKey[];
+  rawFieldsDisclosed: number;
+  receiptHash: string;
+  decisionLatencyMs: number;
+  idempotentReplay: boolean;
+};
+
+export type RemoteDecisionResult = {
+  receipt: RemoteDecisionReceipt;
+  audit: {
+    hash: string;
+    previousHash: string;
+    index: number;
+    count?: number;
+    integrity: {
+      valid: boolean;
+      count: number;
+      headHash: string | null;
+      brokenAt: number | null;
+    };
+    idempotentReplay: boolean;
+  };
+};
+
+export type RemoteReplayResult = {
+  decisionId: string;
+  replayedAt: string;
+  policyVersion: string;
+  matchesOriginal: boolean;
+  original: { decision: string; reasonCode: string; riskScore: number };
+  replay: { decision: string; reasonCode: string; riskScore: number };
+};
+
+export type RemoteControlMetrics = {
+  policyVersion: string;
+  decisionsTotal: number;
+  byDecision: { APPROVE: number; CHALLENGE: number; REVIEW: number };
+  byReason: Record<string, number>;
+  approveRate: number;
+  challengeRate: number;
+  reviewRate: number;
+  missingEvidence: number;
+  failedCriticalEvidence: number;
+  idempotentReplays: number;
+  explicitReplays: number;
+  replayMismatches: number;
+  latencyMs: { samples: number; p50: number | null; p95: number | null };
+  truthBoundary: string;
+};
+
 export type PreprodProbe = {
   target: 'Midnight Preprod';
   checkedAt: string;
   node: { endpoint: string; reachable: boolean; status: number | null; latencyMs: number; error?: string };
   indexer: { endpoint: string; reachable: boolean; status: number | null; latencyMs: number; error?: string };
-  writeState: 'NOT_CONFIGURED';
-  contractAddress: null;
-  transactionId: null;
+  writeState: 'NOT_CONFIGURED' | 'EXTERNAL_DEPLOYMENT_GATE';
+  contractAddress: string | null;
+  transactionId: string | null;
   note: string;
 };
 
@@ -96,6 +164,34 @@ export async function fetchExternalEvidence(event: FraudEventEnvelope): Promise<
     body: JSON.stringify({ event }),
   }));
   return { ...wire, registry: await importRegistry(wire.registry) };
+}
+
+export async function submitExternalDecision(input: {
+  event: FraudEventEnvelope;
+  claims: Partial<Record<ClaimKey, boolean>>;
+  provenance: Partial<Record<ClaimKey, string>>;
+}): Promise<RemoteDecisionResult> {
+  const base = configuredBase();
+  if (!base) throw new Error('External control plane is not configured.');
+  return responseJson<RemoteDecisionResult>(await fetch(`${base}/v1/decisions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  }));
+}
+
+export async function replayExternalDecision(decisionId: string): Promise<RemoteReplayResult> {
+  const base = configuredBase();
+  if (!base) throw new Error('External control plane is not configured.');
+  return responseJson<RemoteReplayResult>(await fetch(`${base}/v1/decisions/${encodeURIComponent(decisionId)}/replay`, {
+    method: 'POST',
+  }));
+}
+
+export async function fetchControlMetrics(): Promise<RemoteControlMetrics> {
+  const base = configuredBase();
+  if (!base) throw new Error('External control plane is not configured.');
+  return responseJson<RemoteControlMetrics>(await fetch(`${base}/v1/metrics`));
 }
 
 export async function appendExternalAudit(record: AuditRecord): Promise<RemoteAuditReceipt> {

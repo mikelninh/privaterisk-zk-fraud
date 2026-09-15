@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, build/v0.5-external-trust]
+    branches: [main, build/v0.5-external-trust, build/v0.7-control-plane]
   pull_request:
-    branches: [main]
+    branches: [main, build/v0.6-preprod]
 
 jobs:
   test-build:
@@ -36,7 +36,10 @@ jobs:
 
       - run: npm install --legacy-peer-deps
       - run: npm test
-      - run: npm run test:pilot-api
+      - name: Test local V0.7 control plane
+        run: npm run test:pilot-api
+      - name: Test public V0.7 control plane
+        run: npm run test:public-service
       - run: npm run midnight:stage
       - run: npm run build
 
@@ -51,7 +54,7 @@ jobs:
       - name: Install Chromium for proof smoke
         run: npx playwright install --with-deps chromium
 
-      - name: Run external-service browser smoke
+      - name: Run V0.7 browser-to-control-plane smoke
         shell: bash
         run: |
           npm run pilot-api > /tmp/privaterisk-pilot-api.log 2>&1 &
