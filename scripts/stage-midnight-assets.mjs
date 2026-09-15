@@ -1,10 +1,10 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const managed = join(process.cwd(), 'contracts', 'midnight', 'managed', 'privaterisk');
 const target = join(process.cwd(), 'public', 'zk');
-const paramsSource = join(homedir(), '.compact', 'params');
+const srsHost = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com/';
+const srsPowers = Array.from({ length: 8 }, (_, index) => index + 9); // k = 9..16
 
 if (!existsSync(managed)) {
   throw new Error('Missing compiled Midnight artifacts. Run npm run midnight:compile first.');
@@ -27,16 +27,14 @@ cpSync(
   join(target, 'zkir', 'proveBalanceForTransfer.bzkir'),
 );
 
-const params = existsSync(paramsSource)
-  ? readdirSync(paramsSource).filter((name) => /^params_\d+\.bin$/.test(name))
-  : [];
-
-if (params.length === 0) {
-  throw new Error(`No Compact PLONK parameters found in ${paramsSource}`);
-}
-
-for (const name of params) {
-  cpSync(join(paramsSource, name), join(target, 'params', name));
+const params = [];
+for (const k of srsPowers) {
+  const name = `bls_midnight_2p${k}`;
+  const response = await fetch(`${srsHost}${name}`);
+  if (!response.ok) throw new Error(`Unable to stage Midnight SRS ${name}: HTTP ${response.status}`);
+  writeFileSync(join(target, 'params', name), Buffer.from(await response.arrayBuffer()));
+  params.push(name);
+  console.log(`↓ ${name}`);
 }
 
 writeFileSync(
@@ -48,6 +46,7 @@ writeFileSync(
       runtime: '0.16.0',
       prover: '@midnight-ntwrk/zkir-v2@2.1.0',
       circuit: 'proveBalanceForTransfer',
+      srsSource: srsHost,
       params,
       generatedAt: new Date().toISOString(),
     },
@@ -56,4 +55,4 @@ writeFileSync(
   ),
 );
 
-console.log(`Staged Midnight browser proving assets (${params.length} parameter file(s)) in public/zk.`);
+console.log(`Staged Midnight browser proving assets (${params.length} SRS slice(s)) in public/zk.`);
