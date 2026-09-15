@@ -72,7 +72,7 @@ export default function App() {
           <p className="eyebrow">AGENTIC SELECTIVE DISCLOSURE · LIVE ZK</p>
           <h1>Ask for proof.<br /><em>Not the private data.</em></h1>
           <p className="hero-copy">
-            The evidence planner asks for the minimum facts required. The privacy guardian blocks the raw-balance request. V0.3 now generates the funding-sufficiency PLONK proof on demand in your browser before deterministic fraud policy can consume the claim.
+            The evidence planner asks for the minimum facts required. The privacy guardian blocks disclosure of the raw balance to the decision system. V0.3 generates the funding-sufficiency PLONK proof on demand inside the local browser proving boundary before deterministic fraud policy can consume the claim.
           </p>
         </div>
         <div className="north-star">
@@ -88,7 +88,7 @@ export default function App() {
           <div className="panel-kicker">V0.3 / ON-DEMAND MIDNIGHT PROVING</div>
           <h2>Private witness → live PLONK proof → policy input.</h2>
           <p>
-            The synthetic balance stays inside Compact private state. The public proof context carries only the €15,000 threshold, a one-time request ID, policy version and expiry. Browser WASM proving is real; chain submission is deliberately not claimed yet.
+            The synthetic balance is consumed only inside the local Compact/PLONK proving boundary. The decision layer receives the predicate, not the balance. Public proof context binds the €15,000 threshold, one-time request ID, policy version and expiry. Chain submission is deliberately not claimed yet.
           </p>
         </div>
 
@@ -105,7 +105,7 @@ export default function App() {
             <div className="proof-spinner" />
             <div>
               <strong>Generating PLONK proof locally…</strong>
-              <p>Loading ZKIR + proving key + SRS parameters. Private balance remains inside the circuit witness.</p>
+              <p>Loading ZKIR + proving key + SRS parameters. Private witness material stays within the browser proving boundary.</p>
             </div>
           </div>
         )}
@@ -129,7 +129,7 @@ export default function App() {
               <div><span>Network submit</span><code>NOT SUBMITTED</code></div>
             </div>
             <p className="truth-boundary">
-              <strong>Truth boundary:</strong> proof generation and constraint checking happen live in-browser. This build does not claim Midnight Preprod/Mainnet settlement or network verification.
+              <strong>Truth boundary:</strong> proof generation and constraint checking happen live in-browser. Private witness material is available to the local prover, as cryptographic proving requires, but is not exposed to the fraud/policy layer or submitted as public state. This build does not claim Midnight Preprod/Mainnet settlement or network verification.
             </p>
           </>
         )}
@@ -157,7 +157,7 @@ export default function App() {
           <button className="primary" disabled={proofStatus === 'proving'} onClick={evaluate}>
             {proofStatus === 'proving' ? 'Generating proof…' : ran ? 'Run fresh proof' : 'Evaluate + prove'}
           </button>
-          <p className="microcopy">Synthetic data only. The raw balance is never rendered, logged, or sent to the proof worker.</p>
+          <p className="microcopy">Synthetic data only. The raw balance is never rendered or sent to the decision/policy layer; it is used locally as private proving witness material.</p>
         </aside>
 
         <section className="trace-card panel">
@@ -231,7 +231,7 @@ export default function App() {
         <>
           <section className="metrics-grid">
             <div className="metric-card"><span>Risk score</span><strong>{result.riskScore.toFixed(2)}</strong><small>deterministic policy input</small></div>
-            <div className="metric-card glow"><span>Raw fields disclosed</span><strong>{result.rawFieldsDisclosed}</strong><small>browser decision flow</small></div>
+            <div className="metric-card glow"><span>Raw fields disclosed</span><strong>{result.rawFieldsDisclosed}</strong><small>to decision/policy layer</small></div>
             <div className="metric-card"><span>Live ZK predicates</span><strong>1</strong><small>generated on demand</small></div>
             <div className="metric-card"><span>PLONK proving</span><strong>{receipt.proveMs}</strong><small>milliseconds</small></div>
           </section>
@@ -248,7 +248,7 @@ export default function App() {
             <div className="panel-kicker">AUTHORITY BOUNDARIES</div>
             <div className="boundary-grid">
               <div><span>AGENT</span><strong>Requests evidence</strong><p>Reasoning and orchestration only.</p></div>
-              <div><span>PROOF</span><strong>Establishes a fact</strong><p>Compact + PLONK; raw balance stays private.</p></div>
+              <div><span>PROOF</span><strong>Establishes a fact</strong><p>Compact + PLONK; witness stays inside local proving boundary.</p></div>
               <div><span>RISK</span><strong>Estimates likelihood</strong><p>Statistical signal, never final authority.</p></div>
               <div><span>POLICY</span><strong>Permits actions</strong><p>Fail-closed deterministic control boundary.</p></div>
             </div>
