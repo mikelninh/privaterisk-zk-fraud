@@ -74,6 +74,10 @@ function encodeBody(body: AttestationBody): Uint8Array {
   ]));
 }
 
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(bytes).buffer;
+}
+
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -87,8 +91,7 @@ function base64UrlToBytes(value: string): Uint8Array {
 }
 
 async function digestHex(bytes: Uint8Array): Promise<string> {
-  const copied = Uint8Array.from(bytes);
-  const digest = await crypto.subtle.digest('SHA-256', copied.buffer);
+  const digest = await crypto.subtle.digest('SHA-256', asArrayBuffer(bytes));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
@@ -96,7 +99,7 @@ export async function signAttestation(body: AttestationBody, privateKey: CryptoK
   const signature = await crypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' },
     privateKey,
-    encodeBody(body),
+    asArrayBuffer(encodeBody(body)),
   );
 
   return {
@@ -139,8 +142,8 @@ export async function verifyAttestation(
   const valid = await crypto.subtle.verify(
     { name: 'ECDSA', hash: 'SHA-256' },
     entry.publicKey,
-    signature,
-    encodeBody(attestation.body),
+    asArrayBuffer(signature),
+    asArrayBuffer(encodeBody(attestation.body)),
   );
   if (!valid) {
     throw new AttestationVerificationError('BAD_SIGNATURE', 'Attestation signature verification failed.');
