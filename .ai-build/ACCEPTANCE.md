@@ -56,8 +56,8 @@
 - [x] Event, audit-store and network-truth tests pass.
 - [x] Production Vite build passes with browser WASM prover.
 - [x] Browser proof smoke generates a fresh PLONK proof.
-- [ ] V0.4 browser smoke explicitly asserts all three signed attestations + persistent audit record.
-- [ ] PR CI green on final V0.4 commit.
+- [x] V0.4 browser smoke explicitly asserts all three signed attestations + persistent audit record.
+- [x] PR CI green on verified V0.4 implementation (`34950226655`).
 - [ ] GitHub Pages V0.4 deployment green.
 
 ## Explicit production gaps
@@ -71,6 +71,11 @@
 - [ ] privacy/DPIA, legal/compliance review and model-risk governance.
 - [ ] real fraud data, calibrated thresholds, evaluation and drift monitoring.
 - [ ] HA, load, chaos, recovery and regional-failure testing.
+
+## V0.4 evidence
+- Verified PR CI run: `34950226655`
+- Evidence note: `evidence/V0.4_ATTESTATION_PILOT.md`
+- Preprod gate: `docs/MIDNIGHT_PREPROD_RUNBOOK.md`
 
 ## Demo success condition
 A viewer should understand within 60 seconds:
