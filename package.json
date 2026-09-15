@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run src/*.test.ts",
+    "smoke:browser": "node scripts/browser-smoke.mjs",
     "midnight:compile": "compact compile contracts/midnight/privaterisk.compact contracts/midnight/managed/privaterisk",
     "midnight:stage": "node scripts/stage-midnight-assets.mjs"
   },
@@ -21,6 +22,7 @@
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@vitejs/plugin-react": "4.3.4",
+    "playwright": "1.55.0",
     "rollup": "4.46.2",
     "typescript": "5.9.3",
     "vite": "6.4.1",
