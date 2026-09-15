@@ -11,6 +11,7 @@ import {
 const CIRCUIT = 'proveBalanceForTransfer';
 const POLICY_VERSION = 'fraud-policy-v0.3';
 const SYNTHETIC_PRIVATE_BALANCE = 27_000n;
+const SAMPLE_COIN_PUBLIC_KEY = '00'.repeat(32);
 
 export type LiveProofReceipt = {
   accepted: true;
@@ -96,8 +97,11 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 async function sha256Bytes(value: string | Uint8Array): Promise<Uint8Array> {
-  const input = typeof value === 'string' ? new TextEncoder().encode(value) : value;
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', input));
+  const source = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  // Force an ArrayBuffer-backed copy for WebCrypto's strict BufferSource type.
+  const input = new Uint8Array(source.byteLength);
+  input.set(source);
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', input.buffer));
 }
 
 async function sha256Hex(value: Uint8Array): Promise<string> {
@@ -116,16 +120,16 @@ const browserWitnesses = {
 };
 
 const contract = new Contract<{ balance: bigint }>(browserWitnesses);
-const initialZswapLocalState = { coinPublicKey: new Uint8Array(32) };
-const initial = contract.initialState({
-  initialZswapLocalState,
-  initialPrivateState: { balance: SYNTHETIC_PRIVATE_BALANCE },
-});
+const constructorContext = compactRuntime.createConstructorContext(
+  { balance: SYNTHETIC_PRIVATE_BALANCE },
+  SAMPLE_COIN_PUBLIC_KEY,
+);
+const initial = contract.initialState(constructorContext);
 
 let sessionContext = compactRuntime.createCircuitContext(
-  compactRuntime.dummyContractAddress(),
-  initialZswapLocalState.coinPublicKey,
-  initial.currentContractState.data,
+  compactRuntime.sampleContractAddress(),
+  initial.currentZswapLocalState,
+  initial.currentContractState,
   initial.currentPrivateState,
 );
 
