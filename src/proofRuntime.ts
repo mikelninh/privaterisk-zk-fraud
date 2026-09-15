@@ -49,18 +49,18 @@ export function classifyProofError(error: unknown): ProofRuntimeError {
 
 function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(
+    const timer = globalThis.setTimeout(
       () => reject(new ProofRuntimeError('PROVER_TIMEOUT', `Proof attempt timed out after ${timeoutMs} ms.`)),
       timeoutMs,
     );
 
     operation.then(
       (value) => {
-        window.clearTimeout(timer);
+        globalThis.clearTimeout(timer);
         resolve(value);
       },
       (error) => {
-        window.clearTimeout(timer);
+        globalThis.clearTimeout(timer);
         reject(error);
       },
     );
