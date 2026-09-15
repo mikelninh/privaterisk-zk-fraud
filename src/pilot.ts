@@ -7,15 +7,40 @@ import {
   verifyAttestation,
   type AttestedClaimKey,
   type VerifiedAttestation,
+  type SignedAttestation,
+  type IssuerRegistryEntry,
 } from './attestations';
 import { generateLiveBalanceProof, type LiveProofFailure, type LiveProofReceipt } from './liveProof';
 import { createBrowserAuditStore, type AuditRecord } from './auditStore';
 import { localProofNetworkReceipt, type NetworkReceipt } from './networkAdapter';
+import {
+  appendExternalAudit,
+  fetchExternalEvidence,
+  fetchPreprodProbe,
+  pilotApiBase,
+  type PreprodProbe,
+  type RemoteAuditReceipt,
+} from './pilotApiClient';
 
 export type AttestationFailure = {
   claim: AttestedClaimKey;
   code: string;
   message: string;
+};
+
+export type ServiceBoundary = {
+  mode: 'external-http' | 'browser-fallback';
+  endpoint: string | null;
+  signingKeys: 'service-side' | 'browser-ephemeral-demo';
+  note: string;
+};
+
+export type AuditChainReceipt = {
+  mode: 'server-hash-chain' | 'browser-local';
+  count: number;
+  verified: boolean;
+  headHash: string | null;
+  idempotentReplay: boolean;
 };
 
 export type PilotRun = {
@@ -25,22 +50,88 @@ export type PilotRun = {
   proof: LiveProofReceipt | LiveProofFailure;
   evaluation: ReturnType<typeof evaluateTransaction>;
   network: NetworkReceipt;
+  preprodProbe: PreprodProbe | null;
+  serviceBoundary: ServiceBoundary;
   audit: AuditRecord;
+  auditChain: AuditChainReceipt;
   auditCount: number;
 };
+
+type EvidenceBundle = {
+  signed: SignedAttestation[];
+  registry: IssuerRegistryEntry[];
+  serviceBoundary: ServiceBoundary;
+};
+
+async function evidenceForEvent(event: FraudEventEnvelope): Promise<EvidenceBundle> {
+  const base = pilotApiBase();
+  if (base) {
+    const remote = await fetchExternalEvidence(event);
+    return {
+      signed: remote.attestations,
+      registry: remote.registry,
+      serviceBoundary: {
+        mode: 'external-http',
+        endpoint: base,
+        signingKeys: 'service-side',
+        note: 'Issuer signing keys remain inside the pilot API process. The browser receives only signed claims and public verification keys.',
+      },
+    };
+  }
+
+  const local = await createDemoAttestorEnvironment();
+  return {
+    signed: await local.issueForEvent(event),
+    registry: local.registry,
+    serviceBoundary: {
+      mode: 'browser-fallback',
+      endpoint: null,
+      signingKeys: 'browser-ephemeral-demo',
+      note: 'GitHub Pages fallback: issuer keys are ephemeral browser fixtures because no external pilot API URL is configured.',
+    },
+  };
+}
+
+async function persistAudit(record: AuditRecord, external: boolean): Promise<{ count: number; chain: AuditChainReceipt }> {
+  if (external) {
+    const receipt: RemoteAuditReceipt = await appendExternalAudit(record);
+    return {
+      count: receipt.count,
+      chain: {
+        mode: 'server-hash-chain',
+        count: receipt.integrity.count,
+        verified: receipt.integrity.valid,
+        headHash: receipt.integrity.headHash,
+        idempotentReplay: receipt.idempotentReplay,
+      },
+    };
+  }
+
+  const store = createBrowserAuditStore();
+  const count = store ? store.append(record).length : 0;
+  return {
+    count,
+    chain: {
+      mode: 'browser-local',
+      count,
+      verified: false,
+      headHash: null,
+      idempotentReplay: false,
+    },
+  };
+}
 
 export async function runPilotDecision(transaction: Transaction): Promise<PilotRun> {
   const event = createFraudEvent(transaction);
   validateFraudEvent(event);
 
-  const attestorEnvironment = await createDemoAttestorEnvironment();
-  const signed = await attestorEnvironment.issueForEvent(event);
+  const evidenceBundle = await evidenceForEvent(event);
   const attestations: VerifiedAttestation[] = [];
   const attestationFailures: AttestationFailure[] = [];
 
-  for (const attestation of signed) {
+  for (const attestation of evidenceBundle.signed) {
     try {
-      attestations.push(await verifyAttestation(attestation, attestorEnvironment.registry, {
+      attestations.push(await verifyAttestation(attestation, evidenceBundle.registry, {
         subjectId: event.payload.subjectId,
         eventId: event.eventId,
       }));
@@ -83,7 +174,7 @@ export async function runPilotDecision(transaction: Transaction): Promise<PilotR
     transactionId: event.payload.transactionId,
     correlationId: proof.accepted ? proof.correlationId : event.eventId.slice(0, 16),
     createdAt: new Date().toISOString(),
-    policyVersion: proof.accepted ? proof.policyVersion : 'fraud-policy-v0.4',
+    policyVersion: proof.accepted ? proof.policyVersion : 'fraud-policy-v0.5',
     decision: evaluation.decision,
     riskScore: evaluation.riskScore,
     proofLatencyMs: proof.accepted ? proof.totalMs : undefined,
@@ -107,8 +198,9 @@ export async function runPilotDecision(transaction: Transaction): Promise<PilotR
     ],
   };
 
-  const auditStore = createBrowserAuditStore();
-  const auditCount = auditStore ? auditStore.append(audit).length : 0;
+  const external = evidenceBundle.serviceBoundary.mode === 'external-http';
+  const persisted = await persistAudit(audit, external);
+  const preprodProbe = external ? await fetchPreprodProbe().catch(() => null) : null;
 
   return {
     event,
@@ -117,7 +209,10 @@ export async function runPilotDecision(transaction: Transaction): Promise<PilotR
     proof,
     evaluation,
     network,
+    preprodProbe,
+    serviceBoundary: evidenceBundle.serviceBoundary,
     audit,
-    auditCount,
+    auditChain: persisted.chain,
+    auditCount: persisted.count,
   };
 }
