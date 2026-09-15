@@ -8,6 +8,8 @@ import { witnesses, type PrivateRiskPrivateState } from './witnesses.js';
 
 const CIRCUIT = 'proveBalanceForTransfer';
 const MANAGED_DIR = join(process.cwd(), 'managed', 'privaterisk');
+const POLICY_VERSION = new Uint8Array(32).fill(7);
+const EXPIRY = 2_000_000_000_000n;
 
 function executePrivateBalancePredicate(balance: bigint, transferAmount: bigint) {
   const contract = new Contract<PrivateRiskPrivateState>(witnesses);
@@ -29,6 +31,8 @@ function executePrivateBalancePredicate(balance: bigint, transferAmount: bigint)
     context,
     new Uint8Array(32).fill(9),
     transferAmount,
+    POLICY_VERSION,
+    EXPIRY,
   );
 }
 
@@ -48,7 +52,7 @@ const keyProvider = {
 };
 
 describe('PrivateRisk real Midnight PLONK verification', () => {
-  it('accepts a ZK proof that €27k private balance satisfies the €15k public threshold', async () => {
+  it('accepts a proof that €27k private balance satisfies the €15k public threshold', async () => {
     const circuitResult = executePrivateBalancePredicate(27_000n, 15_000n);
     const proofData = circuitResult.proofData;
 
