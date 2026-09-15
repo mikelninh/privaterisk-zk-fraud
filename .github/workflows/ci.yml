@@ -2,14 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main, build/v0.3-live-proving]
+    branches: [main, build/v0.5-external-trust]
   pull_request:
     branches: [main]
 
 jobs:
   test-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
+    env:
+      VITE_PILOT_API_URL: http://127.0.0.1:8787
+      PRIVATERISK_PILOT_API_URL: http://127.0.0.1:8787
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,6 +36,7 @@ jobs:
 
       - run: npm install --legacy-peer-deps
       - run: npm test
+      - run: npm run test:pilot-api
       - run: npm run midnight:stage
       - run: npm run build
 
@@ -47,16 +51,24 @@ jobs:
       - name: Install Chromium for proof smoke
         run: npx playwright install --with-deps chromium
 
-      - name: Run live browser proof smoke
+      - name: Run external-service browser smoke
         shell: bash
         run: |
+          npm run pilot-api > /tmp/privaterisk-pilot-api.log 2>&1 &
+          API_PID=$!
           npm run preview -- --host 127.0.0.1 > /tmp/privaterisk-preview.log 2>&1 &
           PREVIEW_PID=$!
-          trap 'kill $PREVIEW_PID || true' EXIT
+          trap 'kill $API_PID $PREVIEW_PID || true' EXIT
+
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:4173/privaterisk-zk-fraud/ >/dev/null; then
-              break
-            fi
+            if curl -fsS http://127.0.0.1:8787/health >/dev/null; then break; fi
             sleep 1
           done
+          curl -fsS http://127.0.0.1:8787/health
+
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/privaterisk-zk-fraud/ >/dev/null; then break; fi
+            sleep 1
+          done
+
           npm run smoke:browser
