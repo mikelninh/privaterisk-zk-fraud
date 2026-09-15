@@ -36,12 +36,14 @@ export type Evaluation = {
   explanation: string;
 };
 
+export type VerifiedClaimInput = Partial<Record<ClaimKey, boolean>>;
+
 // Synthetic provider-side data used by the browser demonstration only.
-// V0.2 cryptographically proves BALANCE_GT_TRANSFER in the separate Midnight
-// Compact/PLONK pipeline; the other claims remain synthetic provider attestations.
+// BALANCE_GT_TRANSFER is deliberately excluded from this source in V0.3: it
+// must arrive through the live Midnight proof boundary.
 const syntheticPrivateData = {
-  identity: { dob: '1993-12-11', kyc: true },
-  bank: { accountAgeDays: 920, balance: 27000, activeCompromise: false },
+  identity: { kyc: true },
+  bank: { accountAgeDays: 920, activeCompromise: false },
 };
 
 export function planEvidence(tx: Transaction): EvidenceRequest[] {
@@ -96,10 +98,7 @@ export function privacyGuard(requests: EvidenceRequest[]): {
   return { approved, blockedRawRequests, trace };
 }
 
-// Browser-demo claim values. BALANCE_GT_TRANSFER intentionally replays the
-// exact V0.2 predicate that is independently compiled and PLONK-verified in CI.
-// This function is not itself a cryptographic verifier.
-export function demoClaimValue(claim: ClaimKey): boolean {
+export function syntheticClaimValue(claim: ClaimKey): boolean {
   switch (claim) {
     case 'KYC_VALID':
       return syntheticPrivateData.identity.kyc;
@@ -108,7 +107,7 @@ export function demoClaimValue(claim: ClaimKey): boolean {
     case 'NO_ACTIVE_COMPROMISE':
       return !syntheticPrivateData.bank.activeCompromise;
     case 'BALANCE_GT_TRANSFER':
-      return syntheticPrivateData.bank.balance >= 15_000;
+      return false;
   }
 }
 
@@ -123,12 +122,15 @@ export function scoreRisk(tx: Transaction, claims: Record<ClaimKey, boolean>): n
 }
 
 export function applyPolicy(riskScore: number, claims: Record<ClaimKey, boolean>): Decision {
-  if (!claims.KYC_VALID || !claims.NO_ACTIVE_COMPROMISE) return 'REVIEW';
+  if (!claims.KYC_VALID || !claims.NO_ACTIVE_COMPROMISE || !claims.BALANCE_GT_TRANSFER) return 'REVIEW';
   if (riskScore >= 0.55) return 'CHALLENGE';
   return 'APPROVE';
 }
 
-export function evaluateTransaction(tx: Transaction): Evaluation {
+export function evaluateTransaction(
+  tx: Transaction,
+  verifiedClaims: VerifiedClaimInput = {},
+): Evaluation {
   const trace: TraceStep[] = [
     {
       actor: 'Event Gateway',
@@ -150,21 +152,28 @@ export function evaluateTransaction(tx: Transaction): Evaluation {
   trace.push(...guarded.trace);
 
   const claims = Object.fromEntries(
-    guarded.approved.map((request) => [request.claim, demoClaimValue(request.claim)]),
+    guarded.approved.map((request) => {
+      const value = request.claim in verifiedClaims
+        ? Boolean(verifiedClaims[request.claim])
+        : syntheticClaimValue(request.claim);
+      return [request.claim, value];
+    }),
   ) as Record<ClaimKey, boolean>;
 
   for (const [claim, value] of Object.entries(claims) as [ClaimKey, boolean][]) {
-    const isMidnightPredicate = claim === 'BALANCE_GT_TRANSFER';
+    const externallyVerified = claim in verifiedClaims;
     trace.push({
-      actor: isMidnightPredicate ? 'Midnight Proof Receipt' : 'Demo Evidence Provider',
+      actor: externallyVerified ? 'Live Midnight Proof' : 'Demo Evidence Provider',
       title: `${claim} ${value ? 'verified' : 'failed'}`,
-      detail: isMidnightPredicate
+      detail: externallyVerified
         ? value
-          ? 'V0.2 replays an accepted Compact/PLONK predicate for this synthetic scenario. The private balance is not exposed as public ledger state.'
-          : 'The funding-sufficiency predicate could not be satisfied.'
+          ? 'On-demand Compact/PLONK proof generated in the browser WASM prover. The raw balance never crossed the private-state boundary.'
+          : 'The cryptographic predicate did not pass.'
         : value
-          ? 'Synthetic provider attestation passed. This claim is not yet backed by the V0.2 Midnight circuit.'
-          : 'Synthetic provider attestation failed.',
+          ? 'Synthetic provider attestation passed. This claim is intentionally labelled non-ZK in V0.3.'
+          : claim === 'BALANCE_GT_TRANSFER'
+            ? 'No live funding-sufficiency proof was supplied. Deterministic policy must not treat this as verified.'
+            : 'Synthetic provider attestation failed.',
       status: value ? 'ok' : 'warn',
     });
   }
@@ -185,7 +194,7 @@ export function evaluateTransaction(tx: Transaction): Evaluation {
       decision === 'CHALLENGE'
         ? 'Step-up authentication required before final approval.'
         : decision === 'REVIEW'
-          ? 'Human review required because a critical trust claim failed.'
+          ? 'Human review required because a critical trust claim is missing or failed.'
           : 'Transaction can proceed under current policy.',
     status: decision === 'APPROVE' ? 'ok' : 'warn',
   });
@@ -199,7 +208,7 @@ export function evaluateTransaction(tx: Transaction): Evaluation {
     trace,
     explanation:
       decision === 'CHALLENGE'
-        ? 'The transfer is high-value, from a new device, and to a new recipient. Identity, account-tenure, and compromise checks are synthetic provider attestations in V0.2; funding sufficiency is backed by the accepted Midnight Compact/PLONK predicate. Policy requires step-up authentication rather than a decline.'
+        ? 'The transfer is high-value, from a new device, and to a new recipient. Identity, account-tenure, and compromise checks are synthetic provider attestations; funding sufficiency arrived through the live Midnight Compact/PLONK proof boundary. Deterministic policy therefore requires step-up authentication rather than a decline.'
         : 'The decision follows deterministic policy over available trust claims and transaction risk signals.',
   };
 }
