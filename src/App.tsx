@@ -48,30 +48,34 @@ export default function App() {
   }
 
   const statusText = proofStatus === 'proving'
-    ? 'Evidence + PLONK proving…'
+    ? 'External evidence + PLONK…'
     : proofStatus === 'verified'
-      ? 'Pilot evidence verified'
+      ? 'Service-boundary decision verified'
       : proofStatus === 'failed'
         ? 'Evidence unavailable'
-        : 'Pilot runtime ready';
+        : 'V0.5 runtime ready';
+
+  const serviceMode = pilotRun?.serviceBoundary.mode === 'external-http' ? 'EXTERNAL HTTP' : 'BROWSER FALLBACK';
+  const chainText = pilotRun?.auditChain.verified ? 'CHAIN VERIFIED' : 'LOCAL DEMO STORE';
+  const probeReachable = Boolean(pilotRun?.preprodProbe?.node.reachable || pilotRun?.preprodProbe?.indexer.reachable);
 
   return (
     <main className="page-shell">
       <header className="topbar">
         <div className="brandmark">PR</div>
         <div>
-          <div className="eyebrow">PRIVATERISK / V0.4</div>
-          <div className="brand-title">Agentic ZK Fraud Decisioning</div>
+          <div className="eyebrow">PRIVATERISK / V0.5</div>
+          <div className="brand-title">Agentic Privacy-Preserving Fraud Infrastructure</div>
         </div>
         <div className={`status-pill ${proofStatus}`}><span /> {statusText}</div>
       </header>
 
       <section className="hero">
         <div>
-          <p className="eyebrow">SIGNED ATTESTATIONS · LIVE ZK · DETERMINISTIC POLICY</p>
-          <h1>Verify the facts.<br /><em>Minimise the disclosure.</em></h1>
+          <p className="eyebrow">EXTERNAL TRUST · LIVE ZK · TAMPER-EVIDENT AUDIT</p>
+          <h1>Trust the claim.<br /><em>Not a giant data dump.</em></h1>
           <p className="hero-copy">
-            A Kafka-compatible payment event triggers an evidence plan. Authorised issuers sign KYC, account-tenure and compromise claims. Compact/PLONK proves funding sufficiency. Policy receives verified predicates — not the underlying private records.
+            A payment event triggers the minimum evidence plan. External issuers sign only the facts policy needs, Compact/PLONK proves funding sufficiency, and the decision is written into a verifiable audit chain. AI orchestrates; cryptography and deterministic policy keep authority bounded.
           </p>
         </div>
         <div className="north-star">
@@ -84,18 +88,20 @@ export default function App() {
 
       <section className={`zk-receipt panel proof-${proofStatus}`}>
         <div className="receipt-intro">
-          <div className="panel-kicker">V0.4 / PILOT EVIDENCE FABRIC</div>
-          <h2>Signed claims + private proof → one bounded decision.</h2>
+          <div>
+            <div className="panel-kicker">V0.5 / SERVICE-BOUNDARY TRUST FABRIC</div>
+            <h2>External signatures + private proof + hash-chain audit.</h2>
+          </div>
           <p>
-            Three ES256 attestations are verified against an authorised issuer registry and bound to this event + subject. Funding sufficiency is proven locally with Midnight Compact/PLONK. The network adapter remains explicit: no Preprod transaction is claimed until one actually exists.
+            In external mode, issuer private keys never enter the browser. The browser receives signed predicates plus public verification keys, validates them locally, generates the balance proof locally, and submits only decision metadata to the audit service. Midnight Preprod remains read-only until a real signer and transaction exist.
           </p>
         </div>
 
         {proofStatus === 'idle' && (
           <div className="proof-idle">
             <span className="pulse-ring" />
-            <strong>Ready to ingest a synthetic payment event.</strong>
-            <small>Fresh issuer keys, attestations and PLONK proof are generated on demand.</small>
+            <strong>Ready for a fresh service-boundary decision.</strong>
+            <small>CI runs the production browser against the real local pilot API.</small>
           </div>
         )}
 
@@ -103,32 +109,32 @@ export default function App() {
           <div className="proof-progress">
             <div className="proof-spinner" />
             <div>
-              <strong>Verifying issuer evidence + generating PLONK proof…</strong>
-              <p>Private witness material stays inside the browser proving boundary; issuer source records stay outside policy.</p>
+              <strong>Requesting signed evidence + generating PLONK proof…</strong>
+              <p>Policy waits until every required trust claim reaches a verified state.</p>
             </div>
           </div>
         )}
 
-        {receipt && (
+        {receipt && pilotRun && (
           <>
             <div className="receipt-grid">
               <div><span>CIRCUIT</span><strong>{receipt.circuit}</strong></div>
               <div><span>PUBLIC THRESHOLD</span><strong>€{receipt.transferAmount.toLocaleString()}</strong></div>
               <div className="private-cell"><span>PRIVATE BALANCE</span><strong>WITHHELD</strong></div>
-              <div><span>PROVER</span><strong>Browser WASM</strong></div>
+              <div><span>TRUST BOUNDARY</span><strong>{serviceMode}</strong></div>
               <div><span>PROOF LATENCY</span><strong>{receipt.totalMs} ms</strong></div>
               <div className="accepted-cell"><span>LOCAL RESULT</span><strong>✓ PROOF GENERATED</strong></div>
             </div>
             <div className="proof-meta-grid">
               <div><span>Correlation</span><code>{receipt.correlationId}</code></div>
-              <div><span>Policy</span><code>{receipt.policyVersion}</code></div>
-              <div><span>Proof SHA-256</span><code>{receipt.proofSha256.slice(0, 20)}…</code></div>
-              <div><span>Proof size</span><code>{receipt.proofBytes.toLocaleString()} bytes</code></div>
-              <div><span>Attestations</span><code>{pilotRun?.attestations.length ?? 0} / 3 VERIFIED</code></div>
-              <div><span>Network submit</span><code>NOT SUBMITTED</code></div>
+              <div><span>Signed claims</span><code>{pilotRun.attestations.length} / 3 VERIFIED</code></div>
+              <div><span>Audit integrity</span><code>{chainText}</code></div>
+              <div><span>Audit head</span><code>{pilotRun.auditChain.headHash ? `${pilotRun.auditChain.headHash.slice(0, 16)}…` : 'N/A'}</code></div>
+              <div><span>Preprod probe</span><code>{pilotRun.preprodProbe ? (probeReachable ? 'REACHABLE' : 'UNREACHABLE') : 'NOT RUN'}</code></div>
+              <div><span>Network write</span><code>NOT CONFIGURED</code></div>
             </div>
             <p className="truth-boundary">
-              <strong>Truth boundary:</strong> local browser proving and signed-attestation verification are real. Demo issuer signing keys are ephemeral and non-exportable. This build does not claim Midnight Preprod/Mainnet settlement, real bank issuers, HSM custody or production fraud-model performance.
+              <strong>Truth boundary:</strong> {pilotRun.serviceBoundary.note} The PLONK proof is generated locally. The server audit chain is tamper-evident in pilot mode, but real bank production still requires HSM/KMS custody, mTLS/service identity, durable storage, HA/SLOs and security/compliance review.
             </p>
           </>
         )}
@@ -151,76 +157,44 @@ export default function App() {
             <div><span className="dot warn" />New device</div>
             <div><span className="dot warn" />New recipient</div>
             <div><span className="dot ok" />KYC claim required</div>
-            <div><span className="dot ok" />Tenure claim required</div>
+            <div><span className="dot ok" />Compromise claim required</div>
           </div>
           <button className="primary" disabled={proofStatus === 'proving'} onClick={evaluate}>
-            {proofStatus === 'proving' ? 'Verifying evidence…' : ran ? 'Run fresh pilot event' : 'Evaluate + prove'}
+            {proofStatus === 'proving' ? 'Verifying trust…' : ran ? 'Run fresh decision' : 'Evaluate + prove'}
           </button>
-          <p className="microcopy">Synthetic event payload. No real PII or bank data. Raw balance and issuer source records are never passed into fraud policy.</p>
+          <p className="microcopy">Synthetic event only. No real PII or bank data. In external mode, signing keys remain service-side.</p>
         </aside>
 
         <section className="trace-card panel">
           <div className="panel-heading">
             <div>
               <div className="panel-kicker">02 / DECISION TRACE</div>
-              <h2>Who established what?</h2>
+              <h2>Who is allowed to establish what?</h2>
             </div>
             {ran && <div className={`decision ${finalDecision.toLowerCase()}`}>{finalDecision}</div>}
           </div>
 
           {!ran ? (
-            <div className="empty-state">
-              <div className="pulse-ring" />
-              <p>Run the event to create signed evidence, generate a fresh proof and inspect the authority trace.</p>
-            </div>
+            <div className="empty-state"><div className="pulse-ring" /><p>Run the event to request signed evidence, generate a fresh proof and inspect the authority trace.</p></div>
           ) : proofStatus === 'proving' ? (
-            <div className="empty-state">
-              <div className="proof-spinner" />
-              <p>Policy is waiting. Missing evidence is never silently replaced by an AI guess.</p>
-            </div>
+            <div className="empty-state"><div className="proof-spinner" /><p>Policy is waiting. Missing evidence is never silently replaced by an AI guess.</p></div>
           ) : proofStatus === 'failed' ? (
             <div className="trace-list">
-              <div className="trace-row">
-                <div className="trace-index blocked">E</div>
-                <div>
-                  <div className="trace-meta">Evidence Boundary</div>
-                  <strong>Required evidence unavailable</strong>
-                  <p>{proofFailure?.message ?? fatalError} The transaction is routed to human review.</p>
-                </div>
-              </div>
-              <div className="trace-row">
-                <div className="trace-index warn">P</div>
-                <div>
-                  <div className="trace-meta">Policy Engine</div>
-                  <strong>REVIEW</strong>
-                  <p>Fail-closed because every critical trust claim must reach VERIFIED state.</p>
-                </div>
-              </div>
+              <div className="trace-row"><div className="trace-index blocked">E</div><div><div className="trace-meta">Evidence Boundary</div><strong>Required evidence unavailable</strong><p>{proofFailure?.message ?? fatalError}</p></div></div>
+              <div className="trace-row"><div className="trace-index warn">P</div><div><div className="trace-meta">Policy Engine</div><strong>REVIEW</strong><p>Fail-closed because every critical trust claim must reach VERIFIED state.</p></div></div>
             </div>
           ) : (
             <div className="trace-list">
               {result.trace.map((step, index) => (
                 <div className="trace-row" key={`${step.actor}-${index}`}>
                   <div className={`trace-index ${step.status}`}>{String(index + 1).padStart(2, '0')}</div>
-                  <div>
-                    <div className="trace-meta">{step.actor}</div>
-                    <strong>{step.title}</strong>
-                    <p>{step.detail}</p>
-                  </div>
+                  <div><div className="trace-meta">{step.actor}</div><strong>{step.title}</strong><p>{step.detail}</p></div>
                 </div>
               ))}
               {result.decision === 'CHALLENGE' && !authenticated && (
-                <div className="challenge-box">
-                  <div>
-                    <span className="panel-kicker">STEP-UP AUTHENTICATION</span>
-                    <strong>Passkey / biometric confirmation required</strong>
-                  </div>
-                  <button onClick={() => setAuthenticated(true)}>Authenticate</button>
-                </div>
+                <div className="challenge-box"><div><span className="panel-kicker">STEP-UP AUTHENTICATION</span><strong>Passkey / biometric confirmation required</strong></div><button onClick={() => setAuthenticated(true)}>Authenticate</button></div>
               )}
-              {authenticated && (
-                <div className="success-banner">✓ Strong authentication passed · transaction approved</div>
-              )}
+              {authenticated && <div className="success-banner">✓ Strong authentication passed · transaction approved</div>}
             </div>
           )}
         </section>
@@ -241,36 +215,48 @@ export default function App() {
             </article>
 
             <article className="panel pilot-card">
-              <div className="panel-kicker">04 / AUTHORISED ISSUERS</div>
+              <div className="panel-kicker">04 / EXTERNAL TRUST SERVICE</div>
+              <h2>{serviceMode}</h2>
+              <p className="pilot-copy">{pilotRun.serviceBoundary.note}</p>
+              <code className="endpoint-code">{pilotRun.serviceBoundary.endpoint ?? 'NO EXTERNAL API CONFIGURED'}</code>
+            </article>
+
+            <article className="panel pilot-card">
+              <div className="panel-kicker">05 / AUTHORISED ISSUERS</div>
               <h2>Signed trust claims</h2>
               <div className="attestation-list">
                 {pilotRun.attestations.map((attestation) => (
-                  <div className="attestation-row" key={`${attestation.issuer}-${attestation.claim}`}>
-                    <span>✓</span>
-                    <div>
-                      <strong>{attestation.claim}</strong>
-                      <small>{attestation.displayName} · ES256 · {attestation.signatureDigest.slice(0, 12)}…</small>
-                    </div>
-                  </div>
+                  <div className="attestation-row" key={`${attestation.issuer}-${attestation.claim}`}><span>✓</span><div><strong>{attestation.claim}</strong><small>{attestation.displayName} · ES256 · {attestation.signatureDigest.slice(0, 12)}…</small></div></div>
                 ))}
               </div>
             </article>
 
             <article className="panel pilot-card">
-              <div className="panel-kicker">05 / NETWORK TRUTH</div>
-              <h2>{pilotRun.network.state}</h2>
-              <p className="pilot-copy">{pilotRun.network.note}</p>
-              <code className="endpoint-code">{pilotRun.network.target === 'local-only' ? 'PREPROD: NOT CONFIGURED' : pilotRun.network.transactionId}</code>
+              <div className="panel-kicker">06 / TAMPER-EVIDENT AUDIT</div>
+              <h2>{chainText}</h2>
+              <dl className="compact-dl">
+                <div><dt>Records</dt><dd>{pilotRun.auditChain.count}</dd></div>
+                <div><dt>Mode</dt><dd>{pilotRun.auditChain.mode}</dd></div>
+                <div><dt>Decision</dt><dd>{pilotRun.audit.decision}</dd></div>
+                <div><dt>Raw fields</dt><dd>{pilotRun.audit.rawFieldsDisclosed}</dd></div>
+              </dl>
             </article>
 
             <article className="panel pilot-card">
-              <div className="panel-kicker">06 / DURABLE AUDIT</div>
-              <h2>{pilotRun.auditCount} record{pilotRun.auditCount === 1 ? '' : 's'} persisted</h2>
+              <div className="panel-kicker">07 / MIDNIGHT PREPROD PROBE</div>
+              <h2>{pilotRun.preprodProbe ? (probeReachable ? 'READ PATH REACHABLE' : 'READ PATH UNREACHABLE') : 'NOT RUN'}</h2>
+              <p className="pilot-copy">{pilotRun.preprodProbe?.note ?? 'External service required for the read-only Preprod probe.'}</p>
+              <code className="endpoint-code">WRITE STATE: NOT CONFIGURED</code>
+            </article>
+
+            <article className="panel pilot-card">
+              <div className="panel-kicker">08 / SERVICE AUDIT RECEIPT</div>
+              <h2>{pilotRun.auditCount} record{pilotRun.auditCount === 1 ? '' : 's'}</h2>
               <dl className="compact-dl">
                 <div><dt>Audit ID</dt><dd>{pilotRun.audit.auditId.slice(0, 22)}…</dd></div>
-                <div><dt>Decision</dt><dd>{pilotRun.audit.decision}</dd></div>
                 <div><dt>Evidence</dt><dd>{pilotRun.audit.evidence.length} verified items</dd></div>
-                <div><dt>Raw fields</dt><dd>{pilotRun.audit.rawFieldsDisclosed}</dd></div>
+                <div><dt>Chain head</dt><dd>{pilotRun.auditChain.headHash ? `${pilotRun.auditChain.headHash.slice(0, 14)}…` : 'N/A'}</dd></div>
+                <div><dt>Replay</dt><dd>{pilotRun.auditChain.idempotentReplay ? 'IDEMPOTENT' : 'FRESH'}</dd></div>
               </dl>
             </article>
           </section>
@@ -278,34 +264,25 @@ export default function App() {
           <section className="metrics-grid">
             <div className="metric-card"><span>Risk score</span><strong>{result.riskScore.toFixed(2)}</strong><small>deterministic policy input</small></div>
             <div className="metric-card glow"><span>Raw fields disclosed</span><strong>{result.rawFieldsDisclosed}</strong><small>to decision/policy layer</small></div>
-            <div className="metric-card"><span>Signed attestations</span><strong>{pilotRun.attestations.length}</strong><small>authorised issuer registry</small></div>
+            <div className="metric-card"><span>Signed attestations</span><strong>{pilotRun.attestations.length}</strong><small>verified in browser</small></div>
             <div className="metric-card"><span>PLONK proving</span><strong>{receipt.proveMs}</strong><small>milliseconds</small></div>
           </section>
 
-          <section className="explain panel">
-            <div>
-              <div className="panel-kicker">07 / EXPLAINABILITY</div>
-              <h2>Human-readable audit explanation</h2>
-            </div>
-            <p>{authenticated ? `${result.explanation} Strong authentication subsequently passed, so the transaction was approved.` : result.explanation}</p>
-          </section>
+          <section className="explain panel"><div><div className="panel-kicker">09 / EXPLAINABILITY</div><h2>Human-readable audit explanation</h2></div><p>{authenticated ? `${result.explanation} Strong authentication subsequently passed, so the transaction was approved.` : result.explanation}</p></section>
 
           <section className="boundary panel">
             <div className="panel-kicker">AUTHORITY BOUNDARIES</div>
             <div className="boundary-grid">
               <div><span>AGENT</span><strong>Requests evidence</strong><p>Reasoning and orchestration only.</p></div>
-              <div><span>ISSUERS + PROOF</span><strong>Establish facts</strong><p>Signed attestations + Compact/PLONK.</p></div>
-              <div><span>RISK</span><strong>Estimates likelihood</strong><p>Statistical signal, never final authority.</p></div>
+              <div><span>TRUST SERVICES</span><strong>Sign predicates</strong><p>Private signing keys stay outside the browser in external mode.</p></div>
+              <div><span>ZK PROVER</span><strong>Establishes funding fact</strong><p>Compact + PLONK, private witness local.</p></div>
               <div><span>POLICY</span><strong>Permits actions</strong><p>Fail-closed deterministic control boundary.</p></div>
             </div>
           </section>
         </>
       )}
 
-      <footer>
-        <span>PrivateRisk V0.4</span>
-        <span>Trust shouldn't require surrendering all your information.</span>
-      </footer>
+      <footer><span>PrivateRisk V0.5</span><span>Trust shouldn't require surrendering all your information.</span></footer>
     </main>
   );
 }
